@@ -1,2 +1,9 @@
 # Genetic-Base-Transgenerational-Plasticity
-Repository of the genetic base of transgenerational plasticity project showing that transgenerational plasticity in the clonal giant duckweed (Spirodela polyrhiza) is heritable, reproducible, predictable and environment-dependant.
+
+Alexandra Chávez, Martin Schäfer, Iris Finkemeier, Shuqing Xu, Meret Huber
+
+# Abstract
+Transgenerational plasticity in the absence of genetic change can alter organismal fitness, yet we know little about the genetic basis of transgenerational fitness effects. Here, we explored whether transgenerational fitness effects can be predicted by the rate of vegetative reproduction, plant resistance and defence. Thereto, we exposed monoclonal, single-descendant lineages from 56 globally distributed genotypes of the clonal duckweed Spirodela polyrhiza to five generations of copper excess, followed by five generations without stress, and then measured plant fitness and phenotypes in both environments. Previous copper excess reduced fitness variation within each genotype and elicited heritable and reproducible fitness effects that depended on both the genotype and environment: genotypes that benefited from previous stress under recurring conditions suffered when the stress was absent, and vice versa. These transgenerational fitness effects were predicted best by copper resistance, explaining 30% of the intraspecific variation: the more susceptible a genotype, the more its offspring suffered from ancestral stress in the absence of recurrent stress; however, these offspring became more resistant to copper excess, likely by protecting the photosystem II. Together, these findings show that transgenerational fitness effects are heritable and variable and likely controlled by genes that regulate plant reproduction and defence.
+
+# Disclaimer
+This repository contains the raw data of the 56-genotype and the 16-genotype experiments, which includes fitness, morphology, and phisiological data. It also contains the R scripts to analyze each experiment and reproduce the plots in the manuscript and supporting information. 
