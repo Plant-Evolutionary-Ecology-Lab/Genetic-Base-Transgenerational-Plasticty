@@ -1,0 +1,1959 @@
+---
+title: "Genetic base of transgenerational plasticity"
+experiment: "56 geneotypes under ancestral copper excess"
+author: "AMCA"
+date: 05.05.2025 
+---
+################################################
+##### Clean workspace and upload libraries #####
+################################################
+
+```{r}
+rm(list=ls()) 
+set.seed(123)
+```
+
+```{r}
+ ## for stats
+library(glmmTMB)
+library(DHARMa)
+
+## for plots
+library(ggplot2) ## for plots
+
+##for data
+library(readxl) #upload excel file
+library(dplyr) #states the grammar of data manipulation
+library(data.table) ## inserting data :=
+library(psych) ## for descriptive stats
+library(plyr) ## for replacing values in a variable
+library(ggpmisc)# for R2 values in ggplot
+
+##other packages
+library(inti)## an alternative for calculating heritability
+#library(knitr)# create tables from the inti output
+library(sommer)#for h2 
+#remotes::install_github("mastoffel/partR2") 
+library(partR2) ##heritability analysis
+
+##for volcano plots
+library (ggrepel)## to exclude labels in ggplot
+
+theme_set(theme_classic(base_size = 18))
+```
+
+
+##############################################################
+##############################################################
+##############################################################
+###### Fitness and phenotype anaylsis of 56 genotype #########
+##############################################################
+##############################################################
+##############################################################
+
+
+```{r}
+df<- read_excel("C:/Users/chavezaa/Xu's lab Dropbox/Alexandra Chavez/achaveza@uni-muenster.de/TransgCopper_copy/GeneticBase_TransgnerationalPlasticity.xlsx", sheet = "56genotypes",col_names = T, na = "")
+```
+  # convert to factors
+```{r}
+df$Pretreat<-factor(df$Pretreat)
+df$TreatEnv<-factor(df$TreatEnv)
+df$Population<-factor(df$Population)
+df$Genotype<-factor(df$Genotype)
+df$Sample<-factor(df$Sample)
+df$Replicate<-factor(df$Replicate)
+
+df$Pretreat1<-factor(df$Pretreat, levels=c("Cu-","Cu+"), ordered=TRUE)
+df$TreatEnv1<-factor(df$TreatEnv, levels=c("Control","Copper"), ordered=TRUE)
+df$Population1<-factor(df$Population, levels = c("America","Europe","India","Asia"), ordered=T)
+
+gen=unique(df$Genotype)
+env=unique(df$TreatEnv)
+pre=unique(df$Pretreat)
+rep=unique(df$Replicate)
+
+df2<-df
+```
+
+########
+
+#############################################################
+##### Variance Analysis  of Population Growth Rate ##########
+#############################################################
+
+## 1 - Variance in whole data
+```{r}
+dfq2.1<-df2[complete.cases(df2$GRArea),]
+
+dfq2.1%>%dplyr::group_by(TreatEnv,Pretreat)%>%dplyr::summarise(N=length(GRArea))
+
+car::leveneTest(data=dfq2.1[dfq2.1$TreatEnv=="Control",],GRArea~(Pretreat)) ##F test #0.06638
+car::leveneTest(data=dfq2.1[dfq2.1$TreatEnv=="Copper",],GRArea~(Pretreat)) ##F test #0.0004447
+
+dfq2.1%>%dplyr::group_by(TreatEnv,Pretreat)%>%dplyr::summarise(data_mean=mean(GRArea, na.rm=T),N=length(GRArea))
+
+pdf("./Fig1b.pdf",height=6,width=4)
+ggplot(dfq2.1,aes(Pretreat, GRArea,fill=Pretreat))+
+  geom_violin(aes(col=Pretreat),alpha=0.5,width=1)+facet_wrap(.~TreatEnv)+
+  geom_boxplot(width=0.5)+guides(col="none",fill="none")+
+  scale_color_manual(values = c("Cu-"="#0056B3", "Cu+"="#CC0000"))+
+  scale_fill_manual(values = c("Cu-"="#0056B3", "Cu+"="#CC0000"))+
+  scale_y_continuous(breaks=seq(0,0.6,by=0.2),limits = c(0,0.6), expand = c(0,0))+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+        axis.text.y = element_text(size = 25,color="black", family = "sans"),
+        axis.title =element_text(size = 30,color="black",face = "bold", family = "sans"),
+        legend.text = element_text(size = 20,color="black", family = "sans"),
+        legend.background = element_rect(fill = F),
+        legend.key = element_rect(fill = F),
+        legend.title = element_text(size = 30,color="black", family = "sans"),
+        axis.ticks = element_line(color="black"))
+dev.off()
+```
+
+## 2 - perform Kolmogorov-Smirnov test
+```{r}
+# Differences of skewness
+df2.a<-df2[complete.cases(df2$GRArea),]
+ks.test(df2.a[df2.a$TreatEnv=="Control"&df2.a$Pretreat=="Cu-",]$GRArea,
+        df2.a[df2.a$TreatEnv=="Control"&df2.a$Pretreat=="Cu+",]$GRArea) 
+
+ks.test(df2.a[df2.a$TreatEnv=="Copper"&df2.a$Pretreat=="Cu-",]$GRArea,
+        df2.a[df2.a$TreatEnv=="Copper"&df2.a$Pretreat=="Cu+",]$GRArea) 
+
+# Skewness
+statpsych::test.skew(df2.a[df2.a$TreatEnv=="Control"&df2.a$Pretreat=="Cu-",]$GRArea)
+statpsych::test.skew(df2.a[df2.a$TreatEnv=="Control"&df2.a$Pretreat=="Cu+",]$GRArea)
+statpsych::test.skew(df2.a[df2.a$TreatEnv=="Copper"&df2.a$Pretreat=="Cu-",]$GRArea)
+statpsych::test.skew(df2.a[df2.a$TreatEnv=="Copper"&df2.a$Pretreat=="Cu+",]$GRArea)
+
+df2.a[df2.a$TreatEnv=="Control"&df2.a$GRArea<0.36,]
+
+pdf("./FigS2d.pdf",height=6,width=8)
+ggplot(df2.a,aes(GRArea))+
+  geom_density(alpha=0.5, aes(fill=Pretreat))+
+  facet_grid(~TreatEnv)+  
+  guides(fill="none")+
+  scale_x_continuous(breaks=seq(0,0.6,by=0.2),limits=c(0,0.6))+
+  scale_y_continuous(limits=c(0,15),expand=c(0,0))+
+  scale_fill_manual (values = c("Cu-"="#0056B3","Cu+"="#CC0000"))+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+        axis.text.y = element_text(size = 18,color="black", family = "sans"),
+        axis.title =element_text(size = 25,color="black",face = "bold", family = "sans"),
+        legend.text = element_text(size = 20,color="black", family = "sans"),
+        legend.background = element_rect(fill = F),
+        legend.key = element_rect(fill = F),
+        legend.title = element_text(size = 25,color="black", family = "sans"),
+        axis.ticks = element_line(color="black"))
+dev.off()
+```
+
+###  3 - estimate variance manually for analysis = df2Var 
+```{r}
+df2Var<-(df2 %>% dplyr::group_by(Pretreat,TreatEnv,Genotype,Population) %>% dplyr::summarise(VGRArea= var(GRArea, na.rm = TRUE)))
+
+df2Var<-data.table(as.data.frame(df2Var[complete.cases(df2Var$Genotype),]))
+
+df2Var%>%dplyr::group_by(TreatEnv,Pretreat)%>%dplyr::summarise(data_mean=mean(VGRArea, na.rm=T),N=length(VGRArea))
+
+## General plot
+a<-round(kruskal.test(data=df2Var[TreatEnv=="Control",], VGRArea~Pretreat)$p.value,3)
+b<-round(kruskal.test(data=df2Var[TreatEnv=="Copper",],  VGRArea~Pretreat)$p.value,4)
+ann_text<-data.frame(label=paste("Kruskal(P) =",c(a,b)),TreatEnv=c("Control","Copper"))
+
+pdf("./Fig1c.pdf",height=6,width=4)
+ggplot(df2Var, aes(x=Pretreat, y=VGRArea))+
+  geom_violin(aes(fill=Pretreat),alpha=0.5)+
+  geom_boxplot(width=0.1,aes(fill=Pretreat))+
+  labs(x="Environment Treatment", y="Variance per Genotype")+
+  scale_y_continuous(breaks=seq(0,0.02,by=0.005),limits=c(0,0.02), expand = c(0,0))+
+  scale_color_manual(values = c("Cu-"="#0056B3","Cu+"="#CC0000"))+
+  scale_fill_manual (values = c("Cu-"="#0056B3","Cu+"="#CC0000"))+
+  guides(fill="none",color="none")+
+  facet_grid(.~TreatEnv)+
+  geom_text(data=ann_text,mapping=aes(x=1.5,y=0.015,label=label))+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+        axis.text.y = element_text(size = 25,color="black", family = "sans"),
+        axis.title =element_text(size = 30,color="black",face = "bold", family = "sans"),
+        legend.text = element_text(size = 20,color="black", family = "sans"),
+        legend.background = element_rect(fill = F),
+        legend.key = element_rect(fill = F),
+        legend.title = element_text(size = 30,color="black", family = "sans"),
+        axis.ticks = element_line(color="black"))
+dev.off()
+```
+
+### 4 - Growth rate smaller than 70%
+```{r}
+df1_1<-data.table(df[,c(1:4,7)])
+df1_1<-df1_1[complete.cases(df1_1),]
+
+list1<-data.frame(Genotype=character(),Replicate=character(),Pretreat=character(),TreatEnv=character(),Area=numeric(),Reference=numeric(),stringsAsFactors=FALSE)
+for (q in gen){
+    for (e in pre){
+      table<-df1_1[Genotype==q&Pretreat==e&TreatEnv=="Copper",]
+      a<-as.numeric(with(table, median(GRArea, na.rm = TRUE)))
+      for(i in 1:nrow(table)){
+        if (table[i,]$GRArea<=(a*0.7)){
+          list1<-rbind(list1,data.frame(Genotype=q,
+                                        Replicate=table[i,]$Replicate,
+                                        Pretreat=e,
+                                        TreatEnv=table[i,]$TreatEnv,
+                                        Area=table[i,]$GRArea,
+                                        Reference=a))  }}
+      }}
+list1
+list1$Genotype ##cu-: "15"  "26"  "32"  "72"  "110" "133" "143" "172" "181" "194" "197" "223" "227", cu+: "110" "142" "179" 
+
+#Plot
+pdf("./Fig1d.pdf",height=6,width=4)
+table2<-data.table(count=c(0,0,13,3),TreatEnv=rep(c("Control","Copper"),each=2),Pretreat=rep(c("Cu-","Cu+"),2))
+ggplot(table2,aes(Pretreat,count,fill=Pretreat))+
+  geom_col()+
+  facet_grid(~TreatEnv)+
+  scale_fill_manual (values = c("Cu-"="#0056B3","Cu+"="#CC0000"))+
+  guides(fill="none",color="none")+
+  scale_y_continuous(breaks=seq(0,14,by=2),limits=c(0,14), expand = c(0,0))
+dev.off()
+```
+ #proportion test for smaller growth
+```{r}
+#GRArea
+prop.test(x=c(10,0),  n=c(56,56)) #60
+prop.test(x=c(13,3),  n=c(56,56)) 
+prop.test(x=c(13,3), n=c(56,56)) #70
+prop.test(x=c(16,3), n=c(56,56))
+prop.test(x=c(20,10),n=c(56,56))#80
+```
+
+### 5 - dfMean
+```{r}
+df2Average<-(df2 %>% dplyr::group_by(Genotype,TreatEnv,Pretreat,Population) %>% dplyr::summarise(MeanGRArea   = mean(GRArea, na.rm = TRUE)))
+
+df2Average<-data.table(df2Average)
+df2Average<-df2Average[complete.cases(df2Average),]
+df2Average%>%dplyr::group_by(TreatEnv,Pretreat)%>%dplyr::summarise(N=length(MeanGRArea))
+
+## Variance analysis of the mean
+car::leveneTest(data=df2Average[df2Average$TreatEnv=="Control",],MeanGRArea~(Pretreat)) ##F test
+car::leveneTest(data=df2Average[df2Average$TreatEnv=="Copper",], MeanGRArea~(Pretreat)) ##F test
+
+pdf("./FigS2b.pdf",height=6,width=4)
+ggplot(df2Average, aes(y=MeanGRArea, x=Pretreat))+
+  geom_violin(aes(col=Pretreat,fill=Pretreat),alpha=0.5,width=1)+
+  geom_boxplot(width=0.5,aes(fill=Pretreat))+
+  facet_wrap(.~TreatEnv)+
+  guides(col="none",fill="none")+
+  scale_color_manual(values = c("Cu-"="#0056B3", "Cu+"="#CC0000"))+
+  scale_fill_manual(values = c("Cu-"="#0056B3", "Cu+"="#CC0000"))+
+  labs(y="MeanGRArea/Genotype")+
+  scale_y_continuous(breaks=seq(0,0.5,by=0.1),limits = c(0.2,0.5), expand = c(0,0))+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+        axis.text.y = element_text(size = 25,color="black", family = "sans"),
+        axis.title =element_text(size = 30,color="black",face = "bold", family = "sans"),
+        legend.text = element_text(size = 20,color="black", family = "sans"),
+        legend.background = element_rect(fill = F),
+        legend.key = element_rect(fill = F),
+        legend.title = element_text(size = 30,color="black", family = "sans"),
+        axis.ticks = element_line(color="black"))
+dev.off()
+```
+
+## 6 - perform Kolmogorov-Smirnov test for mean values
+```{r}
+# Differences of skewness
+df2.a<-df2Average[complete.cases(df2Average$MeanGRArea),]
+ks.test(df2.a[df2.a$TreatEnv=="Control"&df2.a$Pretreat=="Cu-",]$MeanGRArea,
+        df2.a[df2.a$TreatEnv=="Control"&df2.a$Pretreat=="Cu+",]$MeanGRArea) 
+
+ks.test(df2.a[df2.a$TreatEnv=="Copper"&df2.a$Pretreat=="Cu-",]$MeanGRArea,
+        df2.a[df2.a$TreatEnv=="Copper"&df2.a$Pretreat=="Cu+",]$MeanGRArea) 
+
+# Skewness
+statpsych::test.skew(df2.a[df2.a$TreatEnv=="Control"&df2.a$Pretreat=="Cu-",]$MeanGRArea)
+statpsych::test.skew(df2.a[df2.a$TreatEnv=="Control"&df2.a$Pretreat=="Cu+",]$MeanGRArea)
+statpsych::test.skew(df2.a[df2.a$TreatEnv=="Copper"&df2.a$Pretreat=="Cu-",]$MeanGRArea)
+statpsych::test.skew(df2.a[df2.a$TreatEnv=="Copper"&df2.a$Pretreat=="Cu+",]$MeanGRArea)
+
+df2.a[df2.a$TreatEnv=="Control"&df2.a$MeanGRArea<0.36,]
+
+pdf("./FigS2a.pdf",height=6,width=8)
+ggplot(df2.a,aes(MeanGRArea))+
+  geom_density(alpha=0.5, aes(fill=Pretreat))+
+  facet_grid(~TreatEnv)+  
+  guides(fill="none")+
+  scale_x_continuous(breaks=seq(0,0.6,by=0.1),limits=c(0.2,0.5))+
+  scale_y_continuous(limits=c(0,25),expand=c(0,0))+
+  scale_fill_manual (values = c("Cu-"="#0056B3","Cu+"="#CC0000"))+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+        axis.text.y = element_text(size = 18,color="black", family = "sans"),
+        axis.title =element_text(size = 25,color="black",face = "bold", family = "sans"),
+        legend.text = element_text(size = 20,color="black", family = "sans"),
+        legend.background = element_rect(fill = F),
+        legend.key = element_rect(fill = F),
+        legend.title = element_text(size = 25,color="black", family = "sans"),
+        axis.ticks = element_line(color="black"))
+dev.off()
+```
+
+
+###############################
+#### Pre-treatment Effect #####
+###############################
+
+### creating values of effect of copper pre-treatment
+```{r}
+## Pre-treatment effect
+df3<-data.table(df2)
+for (x in gen){
+for (y in env){
+        a<-as.numeric(with(df3[Genotype==x&TreatEnv==y&Pretreat=="Cu-",], mean(GRArea, na.rm = TRUE)))
+	    	                   df3[Genotype==x&TreatEnv==y&Pretreat=="Cu+", paste('PreGRArea') := GRArea/a]
+        b<-as.numeric(with(df3[Genotype==x&TreatEnv==y&Pretreat=="Cu-",], mean(OffFvFm, na.rm = TRUE)))
+	    	                   df3[Genotype==x&TreatEnv==y&Pretreat=="Cu+", paste('PreOffFvFm') := OffFvFm/b]
+}}
+```
+
+## Creating pre-treatment clean data set 
+```{r}
+df4<- df3[Pretreat=="Cu+",]
+
+## Create new replicate variable
+df4 <- do.call(data.frame,lapply(df4,function(x) replace(x, is.infinite(x), NA)))
+df4<-data.table(df4)
+```
+
+### Mean of each genotype for the main plots = df4Mean
+```{r}
+df4Mean<-(df4 %>% dplyr::group_by(Genotype,TreatEnv,Population) %>% dplyr::summarise(
+  MPreGRArea    = mean(PreGRArea, na.rm = TRUE), 
+  MPreOffFvFm = mean(PreOffFvFm, na.rm = TRUE),
+  ))
+df4Mean<-data.table(df4Mean)
+```
+
+### Data of pre-treatment ratios copper vs control
+```{r}
+dfq2.2.1<-merge((df4Mean[df4Mean$TreatEnv=="Copper",]),(df4Mean[df4Mean$TreatEnv=="Control",]),by=c("Genotype","Population")) #"Country",
+dfq2.2.1<- dfq2.2.1[,-c(3,6)]
+colnames(dfq2.2.1)<-c("Genotype","Population", 
+                      "PreGRArea.cu","PreFvFm.cu",
+                      "PreGRArea.ctr","PreFvFm.ctr")
+```
+
+
+###############################
+#### Resistance Ratios ########
+###############################
+
+### creating values of effect of copper induction (first time stress)
+```{r}
+## Pre-treatment effect
+dfR0<-data.table(df2)
+for (x in gen){
+for (y in pre){
+        a<-as.numeric(with(dfR0[Genotype==x&Pretreat==y&TreatEnv=="Control",], mean(GRArea, na.rm = TRUE)))
+	    	                   dfR0[Genotype==x&Pretreat==y&TreatEnv=="Copper", paste('ReGRArea') := GRArea/a]
+}}
+```
+
+## Creating resistance clean data set 
+```{r}
+dfR<- dfR0[TreatEnv=="Copper",]
+
+## Create new replicate variable
+dfR <- do.call(data.frame,lapply(dfR,function(x) replace(x, is.infinite(x), NA)))
+dfR<-data.table(dfR)
+```
+
+### Mean of each genotype for the analysis
+```{r}
+dfRMean<-(dfR %>% dplyr::group_by(Genotype,Pretreat,Population) %>% dplyr::summarise(MReGRArea    = mean(ReGRArea, na.rm = TRUE)))
+dfRMean<-data.table(dfRMean)
+```
+
+### Merge pre-treatment and resistance data
+```{r}
+dfRMeanCu<-dfRMean[Pretreat=="Cu-",]
+df4MeanCu<-df4Mean[TreatEnv=="Copper",]
+df4MeanCtr<-df4Mean[TreatEnv=="Control",]
+
+ResPreCu<-merge(dfRMeanCu,df4MeanCu,by=c("Genotype","Population"))
+ResPreCtr<-merge(dfRMeanCu,df4MeanCtr,by=c("Genotype","Population"))
+```
+
+## Mean data values
+```{r}
+dfMean<-(df2 %>% dplyr::group_by(Genotype,Pretreat,TreatEnv,Population) %>% dplyr::summarise(
+  MGRArea    = mean(GRArea, na.rm = TRUE)   , 
+  MOffFvFm = mean(OffFvFm, na.rm = TRUE), 
+  ))
+```
+
+### Merge data under control and copper conditions and resistance or pre-treatment effect
+```{r}
+### For control plants against resistance
+dfMeanCtr<-dfMean[dfMean$TreatEnv=="Control"&dfMean$Pretreat=="Cu-",]
+dfRMeanCu<-dfRMean[Pretreat=="Cu-",]
+
+CtrRe<-merge(dfMeanCtr,dfRMeanCu,by=c("Genotype","Population","Pretreat"))
+
+### For control plants against pre-treatment
+dfMeanCtr<-dfMean[dfMean$TreatEnv=="Control"&dfMean$Pretreat=="Cu-",]
+df4MeanCtr<-df4Mean[TreatEnv=="Control",]
+df4MeanCu<-df4Mean[TreatEnv=="Copper",]
+
+CtrPreCtr<-merge(dfMeanCtr,df4MeanCtr,by=c("Genotype","Population"))
+CtrPreCu<-merge(dfMeanCtr,df4MeanCu,by=c("Genotype","Population"))
+
+### For plants under copper against pre-treatment
+dfMeanCu<-dfMean[dfMean$TreatEnv=="Copper"&dfMean$Pretreat=="Cu-",]
+df4MeanCtr<-df4Mean[TreatEnv=="Control",]
+df4MeanCu<-df4Mean[TreatEnv=="Copper",]
+
+CuPreCtr<-merge(dfMeanCu,df4MeanCtr,by=c("Genotype","Population"))
+CuPreCu<-merge(dfMeanCu,df4MeanCu,by=c("Genotype","Population"))
+```
+
+
+
+###############################################
+######  Pre-treatment effect analysis #########
+###############################################
+
+## General
+## Assess the effect of the genotype and the pre-treatment on the fitness
+
+```{r}
+dfq2.2<-df4[complete.cases(df4$PreGRArea),]
+
+options(contrasts = c("contr.treatment", "contr.poly"))
+
+lm1<-glmmTMB(data=dfq2.2, PreGRArea~Genotype*TreatEnv+(1|Rack),family=Gamma(log),dispformula=~TreatEnv,control=glmmTMBControl(optCtrl=list(iter.max=1e5,eval.max=1e5)))
+sim1<-simulateResiduals(lm1,n=500, plot=T);testDispersion(sim1);testZeroInflation(sim1)
+plotResiduals(lm1,dfq2.2$Genotype);plotResiduals(lm1,dfq2.2$TreatEnv)
+summary(lm1)
+
+options(contrasts = c("contr.sum", "contr.poly"))
+modelp<-glmmTMB(data=dfq2.2, PreGRArea~Genotype*TreatEnv+(1|Rack),family=Gamma(log),dispformula=~TreatEnv,control=glmmTMBControl(optCtrl=list(iter.max=1e5,eval.max=1e5)))
+car::Anova(modelp,type=3)
+
+dfq2.2%>%dplyr::group_by(TreatEnv)%>%dplyr::summarise(data_mean=mean(PreGRArea, na.rm=T),N=length(PreGRArea))
+length(df4Mean[df4Mean$TreatEnv=="Copper"&df4Mean$MPreGRArea>1,]$Genotype)
+length(df4Mean[df4Mean$TreatEnv=="Copper"&df4Mean$MPreGRArea<1,]$Genotype)
+(25*100)/56
+(31*100)/56
+
+df4Mean2<-(df4 %>% dplyr::group_by(TreatEnv,Genotype) %>% dplyr::summarise(
+  MPreGRArea   = mean(PreGRArea,na.rm=TRUE),
+  se = (sd(PreGRArea,na.rm=TRUE)/sqrt(sum(!is.na(PreGRArea))))))
+df2PreGRArea <-df4Mean2[complete.cases(df4Mean2$MPreGRArea),]
+order.df<-df2PreGRArea[df2PreGRArea$TreatEnv=="Copper",]
+order.df<-order.df[order(order.df$MPreGRArea),]
+list<-unique(order.df$Genotype)
+df2PreGRArea$Genotype<-factor(df2PreGRArea$Genotype,ordered = T,levels=(list))
+
+pdf(".s/FigS3.pdf",height=6,width=16)
+ggplot(df2PreGRArea, aes(x=Genotype, y=MPreGRArea))+
+  geom_point(aes(col=TreatEnv),size=3)+
+  geom_errorbar(aes(col=TreatEnv,ymin=MPreGRArea-se, ymax=MPreGRArea+se),width=0.6,size=0.4)+
+  labs(x="Environment Treatment")+
+  geom_hline(yintercept = 1,linetype="dashed",color="black", size=0.6)+
+  scale_color_manual(values = c("Control"="#0056B3","Copper"="#CC0000"))+
+  guides(color="none")+
+  facet_grid(~TreatEnv)+
+  scale_y_continuous(breaks=seq(0.5,1.5,by=0.25),limits = c(0.5,1.5), expand = c(0,0))+
+  theme(axis.text.y = element_text(size=25,vjust = 1, hjust=0.8,color="black", family = "sans"),
+     axis.text.x = element_text(size = 5,color="black", family = "sans",angle = 90),
+     axis.title =element_text(size = 30,color="black",face = "bold", family = "sans"),
+     legend.text = element_text(size = 20,color="black", family = "sans"),
+     legend.background = element_rect(fill = F),
+     legend.key = element_rect(fill = F),
+     legend.title = element_text(size = 30,color="black", family = "sans"),
+     axis.ticks = element_line(color="black")) 
+dev.off()
+```
+       # Correlation pre-treatment ratio in copper and control (mean data)
+```{r}
+dfq2.2.1<-dfq2.2.1[complete.cases(dfq2.2.1$PreGRArea.cu),]
+options(contrasts = c("contr.treatment", "contr.poly"))
+
+lm01<-glmmTMB(data=dfq2.2.1, PreGRArea.ctr~PreGRArea.cu*Population)
+lm01<-glmmTMB(data=dfq2.2.1, PreGRArea.ctr~PreGRArea.cu+(1|Population))
+sim<-simulateResiduals(lm01,n=500, plot=T);testDispersion(sim)
+summary(lm01)
+car::Anova(lm01,type=2)
+
+pred_df <- data.frame(PreGRArea.cu = seq(min(dfq2.2.1$PreGRArea.cu), max(dfq2.2.1$PreGRArea.cu), length.out = 100))
+pred_df$PreGRArea.ctr <- predict(lm01, newdata = pred_df, re.form = NA)
+
+pdf("./Fig2a.pdf",height=6,width=6)
+ ggplot(dfq2.2.1, aes(y = PreGRArea.ctr, x = PreGRArea.cu)) + 
+  geom_point(color="black", size=5) + 
+  geom_hline(yintercept=1,linetype="dashed")+
+  geom_vline(xintercept=1,linetype="dashed")+
+  theme(axis.text = element_text(size=16), axis.title = element_text(size=20))+
+  geom_line(data=pred_df, aes(y = PreGRArea.ctr, x = PreGRArea.cu),color="#CC0000",size=2)+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  scale_y_continuous(breaks=seq(0.9,1.2,by=0.1),limits = c(0.9,1.2),expand=c(0,0))+
+  scale_x_continuous(breaks=seq(0.7,1.45,by=0.15),limits = c(0.7,1.45),expand=c(0,0))+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+      axis.text.y = element_text(size = 18,color="black", family = "sans"),
+      axis.ticks = element_line(color="black"))
+ dev.off()
+
+ sample<-factor(c("4","8","32","35","39","43","69","72","103","126","186","197","198","207","212","235"))
+ df_labels <- dfq2.2.1[dfq2.2.1$Genotype %in% sample, ]
+ 
+ pdf("./FigS8.pdf",height=6,width=6)
+ ggplot(dfq2.2.1, aes(y = PreGRArea.ctr, x = PreGRArea.cu)) + 
+  geom_point(color="black", size=5) + 
+  geom_hline(yintercept=1,linetype="dashed")+
+  geom_vline(xintercept=1,linetype="dashed")+
+  geom_text(data = df_labels, aes(label = Genotype), vjust = -1, size = 5,family = "sans") +
+  theme(axis.text = element_text(size=16), axis.title = element_text(size=20))+
+  geom_line(data=pred_df, aes(y = PreGRArea.ctr, x = PreGRArea.cu),color="#CC0000",size=2)+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  scale_y_continuous(breaks=seq(0.9,1.2,by=0.1),limits = c(0.9,1.2),expand=c(0,0))+
+  scale_x_continuous(breaks=seq(0.7,1.45,by=0.15),limits = c(0.7,1.45),expand=c(0,0))+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+      axis.text.y = element_text(size = 18,color="black", family = "sans"),
+      axis.ticks = element_line(color="black"))
+ dev.off()
+```
+        # histogram plot for heritability
+```{r}
+dfq2.2<-df4[complete.cases(df4$PreGRArea),]
+
+df4Mean2<-(df4 %>% dplyr::group_by(TreatEnv,Genotype) %>% dplyr::summarise(
+  MPreGRArea   = mean(PreGRArea,na.rm=TRUE),
+  se = (sd(PreGRArea,na.rm=TRUE)/sqrt(sum(!is.na(PreGRArea))))))
+df2PreGRArea <-df4Mean2[complete.cases(df4Mean2$MPreGRArea),]
+
+df2PreGRArea%>%dplyr::group_by(TreatEnv)%>%dplyr::summarise(
+  data_mean=mean(MPreGRArea, na.rm=T),
+  max=max(MPreGRArea, na.rm=T),
+  min=min(MPreGRArea, na.rm=T),
+  N=length(MPreGRArea))
+
+pdf("./Fig2a.pdf",height=6,width=8)
+ggplot(df2PreGRArea, aes(x=round(MPreGRArea,2)))+
+  geom_histogram(binwidth=0.05, aes(fill=TreatEnv))+#
+  facet_grid(~TreatEnv)+
+  scale_fill_manual (values = c("Control"="#0056B3","Copper"="#CC0000"))+
+  scale_x_continuous(breaks=seq(0.75,1.5,by=0.25),limits=c(0.72,1.5),expand=c(0,0))+
+  scale_y_continuous(breaks=seq(0,25,by=5),limits=c(0,25),expand=c(0,0))+
+  geom_vline(xintercept = 1,linetype="dashed",color="black", size=1)+
+  guides(fill="none")+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+      axis.text.y = element_text(size = 18,color="black", family = "sans"),
+      axis.title =element_text(size = 25,color="black",face = "bold", family = "sans"),
+      axis.ticks = element_line(color="black"))
+dev.off()
+```
+
+       # correlation between resistance of first time stressed plants and pre-treatment
+```{r}
+# Pre-treatment in copper
+model<-glmmTMB(data=ResPreCu,MReGRArea~MPreGRArea,family=Gamma(log))
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model)
+
+pdf("./Fig3a2.pdf",height=6,width=4)
+ggplot(data=ResPreCu,aes(x=MPreGRArea,y=MReGRArea))+
+  geom_point(size=3)+
+  labs(y="Resistance under first time stress",x="Pre-treatment ratio under copper")+
+  geom_line(aes(y=predict(model, type="response")),size=1.5,col="#CC0000")+
+  scale_x_continuous(breaks=seq(0.7,1.5,by=0.2),limits=c(0.7,1.5),expand=c(0,0))+
+  scale_y_continuous(breaks=seq(0.5,1,by=0.1),limits=c(0.5,1),expand=c(0,0))+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+      axis.text.y = element_text(size = 18,color="black", family = "sans"),
+      axis.title =element_text(size = 25,color="black",face = "bold", family = "sans"),
+      axis.ticks = element_line(color="black"))
+dev.off()
+
+# Pre-treatment in control
+model<-glmmTMB(data=ResPreCtr,MReGRArea~MPreGRArea)
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model)
+
+pdf("./Fig3a1.pdf",height=6,width=4)
+ggplot(data=ResPreCtr,aes(x=MPreGRArea,y=MReGRArea))+
+  geom_point(size=3)+
+  labs(y="Resistance under first time stress",x="Pre-treatment ratio under control")+
+  geom_line(aes(y=predict(model, type="response")),size=1.5,col="#CC0000")+
+  scale_x_continuous(breaks=seq(0.9,1.2,by=0.1),limits=c(0.9,1.2),expand=c(0,0))+
+  scale_y_continuous(breaks=seq(0.5,1,by=0.1),limits=c(0.5,1),expand=c(0,0))+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+      axis.text.y = element_text(size = 18,color="black", family = "sans"),
+      axis.title =element_text(size = 25,color="black",face = "bold", family = "sans"),
+      axis.ticks = element_line(color="black"))
+dev.off()
+```
+       # correlation between growth rate under control and plant resistance for first time
+```{r}
+model<-glmmTMB(data=CtrRe,MGRArea~MReGRArea)
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model)
+
+pdf("./Fig3b.pdf",height=6,width=4)
+ggplot(data=CtrRe,aes(x=MReGRArea,y=MGRArea))+
+  geom_point(size=3)+
+  labs(y="Growth under control",x="Resistance under first time stress")+
+  geom_line(aes(y=predict(model, type="response")),size=1.5,col="#CC0000")+
+  scale_x_continuous(breaks=seq(0.5,1,by=0.1),limits=c(0.5,1),expand=c(0,0))+
+  scale_y_continuous(breaks=seq(0.34,0.49,by=0.05),limits=c(0.34,0.49),expand=c(0,0))+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+      axis.text.y = element_text(size = 18,color="black", family = "sans"),
+      axis.title =element_text(size = 25,color="black",face = "bold", family = "sans"),
+      axis.ticks = element_line(color="black"))
+dev.off()
+```
+       # correlation between growth rate under control and plant pre-treatment
+```{r}
+model<-glmmTMB(data=CtrPreCtr,MGRArea~MPreGRArea,dispformula = ~Population)
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model)
+
+pdf("./Fig3c1.pdf",height=6,width=4)
+ggplot(data=CtrPreCtr,aes(x=MPreGRArea,y=MGRArea))+
+  geom_point(size=3)+
+  labs(y="Growth under control",x="Pre-treatment ratio under control")+
+  geom_line(aes(y=predict(model, type="response")),size=1.5,col="#CC0000")+
+  scale_x_continuous(breaks=seq(0.9,1.2,by=0.1),limits=c(0.9,1.2),expand=c(0,0))+
+  scale_y_continuous(breaks=seq(0.34,0.49,by=0.05),limits=c(0.34,0.49),expand=c(0,0))+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+      axis.text.y = element_text(size = 18,color="black", family = "sans"),
+      axis.title =element_text(size = 25,color="black",face = "bold", family = "sans"),
+      axis.ticks = element_line(color="black"))
+dev.off()
+
+
+model<-glmmTMB(data=CtrPreCu,MGRArea~MPreGRArea,dispformula = ~Population)
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model)
+
+pdf("./Fig3c2.pdf",height=6,width=4)
+ggplot(data=CtrPreCu,aes(x=MPreGRArea,y=MGRArea))+
+  geom_point(size=3)+
+  labs(y="Growth under control",x="Pre-treatment ratio under copper")+
+  geom_line(aes(y=predict(model, type="response")),size=1.5,col="#CC0000")+
+  scale_x_continuous(breaks=seq(0.7,1.5,by=0.2),limits=c(0.7,1.5),expand=c(0,0))+
+  scale_y_continuous(breaks=seq(0.34,0.49,by=0.05),limits=c(0.34,0.49),expand=c(0,0))+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+      axis.text.y = element_text(size = 18,color="black", family = "sans"),
+      axis.title =element_text(size = 25,color="black",face = "bold", family = "sans"),
+      axis.ticks = element_line(color="black"))
+dev.off()
+```
+   
+##########################################################
+###### GRArea and FvFm correlation analysis ##############
+##########################################################
+
+    ## Create clean datasets
+```{r}
+df4_clean<-df4[complete.cases(df4$PreGRArea),]
+df4_clean<-df4_clean[complete.cases(df4_clean$PreOffFvFm),]
+
+df4Mean_clean<-df4Mean[complete.cases(df4Mean$MPreGRArea),]
+df4Mean_clean<-df4Mean_clean[complete.cases(df4Mean_clean$MPreOffFvFm),]
+```
+   #Modelling with mean values per genotype
+```{r}
+options(contrasts = c("contr.treatment", "contr.poly"))
+mod1<-glmmTMB(data=df4Mean_clean,MPreGRArea~MPreOffFvFm*TreatEnv+(1|Genotype),dispformula = ~TreatEnv)
+sim<-simulateResiduals(mod1,n=500, plot=T);testDispersion(sim)
+summary(mod1)
+
+options(contrasts = c("contr.sum", "contr.poly")) 
+modp<-glmmTMB(data=df4Mean_clean,MPreGRArea~MPreOffFvFm*TreatEnv+(1|Genotype),dispformula = ~TreatEnv)
+car::Anova(modp,test="Chi",type=3)
+
+modCtr<-glmmTMB(data=df4Mean_clean[df4Mean_clean$TreatEnv=="Control",],MPreGRArea~MPreOffFvFm)
+modCu <-glmmTMB(data=df4Mean_clean[df4Mean_clean$TreatEnv=="Copper",], MPreGRArea~MPreOffFvFm)
+sim<-simulateResiduals(modCtr,n=500, plot=T);testDispersion(sim)
+sim<-simulateResiduals(modCu, n=500, plot=T);testDispersion(sim)
+
+summary(modCtr)
+summary(modCu)
+car::Anova(modCtr,test="Chi")
+car::Anova(modCu, test="Chi")
+
+pdf("./Fig4a.pdf",height=6,width=6)
+ggplot(df4Mean_clean, aes(y=MPreGRArea, x=MPreOffFvFm, color=TreatEnv))+
+  geom_point(size=2)+
+  geom_smooth(method='lm',se=F,size=1.5,formula = y~x)+
+  stat_poly_eq(formula = x~y, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  scale_color_manual(values=c("Control"="#0056B3", "Copper"="#CC0000"))+
+  scale_x_continuous(breaks=seq(0.95,1.15,by=0.05),limits = c(0.94,1.15), expand = c(0,0))+
+  scale_y_continuous(breaks=seq(0.7,1.5,by=0.2),limits = c(0.7,1.5), expand = c(0,0))+
+  guides(color="none")+
+  theme(axis.text.x = element_text(size=18,vjust = 1, hjust=0.8,color="black", family = "sans"),
+     axis.text.y = element_text(size = 18,color="black", family = "sans"),
+     axis.title =element_text(size = 30,color="black",face = "bold", family = "sans"),
+     legend.text = element_text(size = 20,color="black", family = "sans"),
+     legend.background = element_rect(fill = F),
+     legend.key = element_rect(fill = F),
+     legend.title = element_text(size = 30,color="black", family = "sans"),
+     axis.ticks = element_line(color="black")) 
+dev.off()
+```
+
+
+#################################
+###### Heritability  ############
+#################################
+
+  ## Analysis with Cullis_H2
+      ## Create function
+```{r}
+Cullis_H2TMB <- function(model) {
+  # extract genetic variance
+  var_g <- glmmTMB::VarCorr(model, comp = "Variance")[[1]]$Genotype[1] 
+  # retrieve conditional variance of BLUPs
+  convars <- glmmTMB::ranef(model, condVar = TRUE)  #returns the conditional variance of Best Linear Unbiased Predictions (BLUPs) for Genotype
+  g_convar <- attr(convars[[1]]$Genotype, "condVar") #captures the conditional variance for each Genotype level for the prediction error variance (PEV)
+  # calculate the adjusted variance of BLUPs
+  vblup <- 2 * mean(g_convar)
+  # calculate the average standard error of differences (AVSED)
+  avsed <- sqrt(vblup)
+  H2 <- 1 - (vblup / (2 * var_g))
+  out_list <- list("avsed" = avsed, "H2" = H2)
+  return(out_list)}
+```
+      ## Calculate for PreGRArea
+```{r}
+dfq2.2<-df4[complete.cases(df4$PreGRArea),]
+dfq2.2.0<-df4Mean[complete.cases(df4Mean$MPreGRArea),]
+
+mod0<-glmmTMB(data=dfq2.2, PreGRArea~TreatEnv+(1|Genotype),family=Gamma(log),dispformula =~TreatEnv)
+sim<-simulateResiduals(mod0,n=500, plot=T);testDispersion(sim)
+summary(mod0)
+car::Anova(mod0)
+Cullis_H2TMB(mod0)
+
+mod2.2<-glmmTMB(data=dfq2.2[dfq2.2$TreatEnv=="Control",], PreGRArea~1+(1|Genotype))
+sim<-simulateResiduals(mod2.2,n=500, plot=T);testDispersion(sim)
+summary(mod2)
+Cullis_H2TMB(mod2.2)
+
+mod1.2<-glmmTMB(data=dfq2.2[dfq2.2$TreatEnv=="Copper",], PreGRArea~1+(1|Genotype))
+sim<-simulateResiduals(mod1.2,n=500, plot=T);testDispersion(sim)
+summary(mod1)
+Cullis_H2TMB(mod1.2)
+
+rsq(mod)
+rsq.partial(mod)
+performance::r2(mod)
+```
+
+ 
+  ## Analysis with INTI ## gives similar results
+    ## PreGRArea
+```{r}
+dfq2.2<-df4[complete.cases(df4$PreGRArea),]
+
+hr <- H2cal(data = dfq2.2[dfq2.2$TreatEnv=="Control",], 
+            trait = "PreGRArea", gen.name = "Genotype", 
+            rep.n = 100, fixed.model = "0 + (1|Rack) + Genotype", 
+            random.model = "1 + (1|Rack) + (1|Genotype)", 
+            emmeans = TRUE, 
+            plot_diag = TRUE, 
+            outliers.rm = TRUE)
+
+hr <- H2cal(data = dfq2.2[dfq2.2$TreatEnv=="Copper",], 
+            trait = "PreGRArea", gen.name = "Genotype", 
+            rep.n = 100, fixed.model = "0 + (1|Rack) + Genotype", 
+            random.model = "1 + (1|Rack) + (1|Genotype)", 
+            emmeans = TRUE, 
+            plot_diag = TRUE, 
+            outliers.rm = TRUE)
+
+summary(hr$model)
+
+# variance components
+hr$tabsmr
+hr$tabsmr %>% kable(caption = "Variance component table")
+
+# best linear unbiased estimators (BLUEs)
+hr$blues
+hr$blues %>% kable(caption = "BLUEs")
+
+# best linear unbiased predictors (BLUPs)
+hr$blups
+hr$blups %>% kable(caption = "BLUPs")
+
+# outliers
+hr$outliers$fixed
+hr$outliers$fixed %>% kable(caption = "Outliers fixed model")
+
+hr$outliers$random 
+hr$outliers$random %>% kable(caption = "Outliers random model")
+```
+       ## calculate h2
+```{r}
+# Assume 'GRM' is a genomic relationship matrix created from SNP data
+# and 'data' is your phenotype data with fitness trait and genotypes.
+GRM<-read.table("./Kinship_IBD_matrix_42geno.txt", header = T, row.names = 1)
+GRM <- as.matrix(GRM)
+if (!isSymmetric(GRM)) {
+  stop("The loaded matrix is not symmetric. Please check the input format.")}
+# Confirm that the matrix dimensions are correct
+print(dim(GRM))
+
+
+### EXTRACT TABLE FROM TASSEL WITH CORRECT DATA
+
+model <- mmer(PreGRArea ~ 1, 
+              random = ~vsr(Genotype, Gu = GRM),# Specify GRM as random effect
+              rcov=~units,
+              data = dfq2.3[dfq2.3$TreatEnv=="Control",])  ##0.208258
+
+model <- mmer(PreGRArea ~ 1, 
+              random = ~vsr(Genotype, Gu = GRM),# Specify GRM as random effect
+              rcov=~units,
+              data = dfq2.3[dfq2.3$TreatEnv=="Copper",])  ##0.309337
+
+# Extract variance components and calculate h2
+var_components <- summary(model)$varcomp
+V_A <- var_components["u:Genotype.PreGRArea-PreGRArea", "VarComp"]  # Genetic variance
+V_E <- var_components["units.PreGRArea-PreGRArea", "VarComp"]       # Residual varianc
+h2 <- V_A / (V_A + V_E)  # Narrow-sense heritability
+h2
+
+```
+
+
+##################################################
+##################################################
+##################################################
+###### Analysis of metabolites ###################
+##################################################
+##################################################
+##################################################
+
+#upload data of metabolites
+```{r}
+dfMet0<-read_excel("C:/Users/chavezaa/Xu's lab Dropbox/Alexandra Chavez/achaveza@uni-muenster.de/TransgCopper_copy/GeneticBase_TransgnerationalPlasticity.xlsx", col_names = T, na = "",sheet="Metabolites")
+```
+  #convert to factors
+```{r}
+# create ordered variables for the plots
+dfMet0$Pretreat1<-factor(dfMet0$Pretreat, levels=c("Cu-","Cu+"), ordered=TRUE)
+dfMet0$TreatEnv1<-factor(dfMet0$TreatEnv, levels=c("Control","Copper"), ordered=TRUE) 
+
+# define class of variables 
+dfMet0$Pretreat<-factor(dfMet0$Pretreat)
+dfMet0$TreatEnv<-factor(dfMet0$TreatEnv)
+dfMet0$Genotype<-factor(dfMet0$Genotype)
+dfMet0$Plate<-factor(dfMet0$Plate)
+dfMet0$Column<-factor(dfMet0$Column)
+dfMet0$SamplePosition<-factor(dfMet0$SamplePosition)
+```
+#### Calclulating the pre-treatment ratio for metabolites
+```{r}
+dfMet1<-data.table(dfMet0)
+TreatEnv<-unique(dfMet1$TreatEnv)
+Metabolite<-colnames(dfMet1)[7:12]
+
+for (m in TreatEnv){
+  for (n in Metabolite){ 
+        a5<-as.numeric(with(dfMet1[TreatEnv==m&Pretreat=="Cu-",], mean(get(n),na.rm=T)))
+                            dfMet1[TreatEnv==m&Pretreat=="Cu+",paste0("Pre",n):=get(n)/round(a5,8)]
+  }}
+```
+
+ Prepare fitness data and merge with metabolite data
+```{r}
+df_summ<-df3 %>% 
+  dplyr::group_by(Genotype,Pretreat, TreatEnv,Population) %>% dplyr::summarise(
+  meanGRArea=mean(GRArea, na.rm = TRUE),
+  meanPreGRArea=mean(PreGRArea, na.rm = TRUE),
+  meanOffFvFm=mean(OffFvFm, na.rm = TRUE),
+  meanPreOffFvFm=mean(PreOffFvFm, na.rm = TRUE))
+df_summ<-data.table(df_summ)
+
+df_Met<-merge(df_summ,dfMet1, by=c("Genotype","Pretreat", "TreatEnv"))
+df_Met<-data.table(df_Met)
+```
+
+ Clean pre-treatment data
+```{r}
+df_Met2<-df_Met[Pretreat=="Cu+",]
+df_Met2<-df_Met2[,-c(2,5,7,10,12:18)]
+
+Metab<-colnames(df_Met2)[9:14]
+dfsumm<-df_Met2 %>%
+  dplyr::group_by(TreatEnv) %>%
+  dplyr::summarise_at(vars(all_of(Metab)), mean, na.rm = TRUE)
+```
+
+ Mean of each genotype for the analysis and merge data
+```{r}
+df4Mean<-(df4 %>% dplyr::group_by(Genotype,TreatEnv,Population) %>% dplyr::summarise(
+  MPreGRArea    = mean(PreGRArea, na.rm = TRUE)))
+df4Mean<-data.table(df4Mean)
+
+#To make even comparison with names (doesn't generate any mean)
+dfMetMean<-(dfMet %>% dplyr::group_by(Genotype,Pretreat,TreatEnv) %>% dplyr::summarise(
+  MCyanidine3GlcHPLC    = mean(Cyanidine3GlcHPLC, na.rm = TRUE)   , 
+  MCyanidinMalGlcHPLC   = mean(CyanidinMalGlcHPLC, na.rm = TRUE)  , 
+    
+  MLuteolin8CGlc  = mean(Luteolin8CGlc, na.rm = TRUE) , 
+  MApigenin8CGlc = mean(Apigenin8CGlc, na.rm = TRUE), 
+
+  MLuteolin7OGlc = mean(Luteolin7OGlc, na.rm = TRUE), 
+  MApigenin7OGlc = mean(Apigenin7OGlc, na.rm = TRUE)
+  ))
+
+### For control plants against pre-treatment
+dfMeanCtr<-dfMetMean[dfMetMean$TreatEnv=="Control"&dfMetMean$Pretreat=="Cu-",]
+df4MeanCtr<-df4Mean[TreatEnv=="Control",]
+df4MeanCu<-df4Mean[TreatEnv=="Copper",]
+
+CtrPreCtr<-merge(dfMeanCtr,df4MeanCtr,by=c("Genotype"))
+CtrPreCu<-merge(dfMeanCtr,df4MeanCu,by=c("Genotype"))
+```
+
+  ##Cyanidine3GlcHPLC
+    #Pretreat*TreatEnv* 
+```{r}
+df1lm<-df_Met[complete.cases(df_Met$Cyanidine3GlcHPLC),]
+options(contrasts = c("contr.treatment", "contr.poly"))
+
+model1<-glmmTMB(data=df1lm, Cyanidine3GlcHPLC~Pretreat*TreatEnv+(1|Genotype),family=gaussian(inverse),dispformula=~TreatEnv)
+sim1<-simulateResiduals(model1,n=500, plot=T);testDispersion(sim1)
+summary(model1)
+
+options(contrasts = c("contr.sum", "contr.poly"))
+modelp<-glmmTMB(data=df1lm, Cyanidine3GlcHPLC~Pretreat*TreatEnv1+(1|Genotype),family=gaussian(inverse),dispformula=~TreatEnv)
+car::Anova(modelp,type="III")
+
+df1lm%>%dplyr::group_by(TreatEnv,Pretreat)%>%dplyr::summarise(data_mean=mean(Cyanidine3GlcHPLC, na.rm=T),N=length(Cyanidine3GlcHPLC))
+((0.1147804-0.1137393	)/0.1137393	)*100 #0.9
+((0.2365233-0.2221308)/0.2221308)*100 #6.5
+
+moda<-glmmTMB(data=df1lm[df1lm$TreatEnv=="Control",],Cyanidine3GlcHPLC~Pretreat+(1|Genotype))
+moda<-glmmTMB(data=df1lm[df1lm$TreatEnv1=="Copper",],Cyanidine3GlcHPLC~Pretreat+(1|Genotype),family=gaussian(log))
+simulateResiduals(moda,n=500, plot=T);#plotResiduals(model1,df1lm$Pretreat,main=NULL)
+car::Anova(moda,type="II")
+
+dflm1<-(df1lm %>% dplyr::group_by(TreatEnv1,Pretreat1) %>% dplyr::summarise(
+  meanCyanidine3GlcHPLC   = mean(Cyanidine3GlcHPLC),
+  se = (sd(Cyanidine3GlcHPLC)/sqrt(length(Cyanidine3GlcHPLC)))))
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS7b.pdf",height=6,width=4)
+ggplot(df1lm,aes(Pretreat1, Cyanidine3GlcHPLC))+
+  geom_col(data=dflm1,aes(x=Pretreat1, y=meanCyanidine3GlcHPLC,fill=Pretreat1),width=0.8)+
+  geom_errorbar(data=dflm1,aes(x=Pretreat1, y=meanCyanidine3GlcHPLC,ymin=meanCyanidine3GlcHPLC-se, ymax=meanCyanidine3GlcHPLC+se), width=0.3, position=position_dodge(0.80))+
+  scale_color_manual(values = c("Cu-"="#0056B3", "Cu+"="#CC0000"))+
+  scale_fill_manual(values = c("Cu-"="#0056B3", "Cu+"="#CC0000"))+
+  facet_grid(~TreatEnv1)+
+  scale_y_continuous(breaks=seq(0,0.25,by=0.05),limits = c(0,0.25), expand = c(0,0))+
+  guides(col="none",fill="none")+labs(y="Cyanidine3GlcHPLC µmol/g FW")+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+        axis.text.y = element_text(size = 25,color="black", family = "sans",angle=90),
+        axis.title =element_text(size = 30,color="black",face = "bold", family = "sans"),
+        legend.text = element_text(size = 20,color="black", family = "sans"),
+        legend.background = element_rect(fill = F),
+        legend.key = element_rect(fill = F),
+        legend.title = element_text(size = 30,color="black", family = "sans"),
+        axis.ticks = element_line(color="black"))
+dev.off()
+```
+    #Induction # Cu-
+```{r}
+df1lm<-df_Met[complete.cases(df_Met$Cyanidine3GlcHPLC),]
+df1lm<-df1lm[df1lm$Pretreat=="Cu-",]
+
+model1<-glmmTMB(data=df1lm, Cyanidine3GlcHPLC~TreatEnv+(1|Genotype),family=Gamma(log))
+plotResiduals(model1,df1lm$TreatEnv,main=NULL);sim1<-simulateResiduals(model1,n=500, plot=T);testDispersion(sim1)
+model1<-glmmTMB(data=df1lm, Cyanidine3GlcHPLC~TreatEnv+(1|Genotype),family=Gamma(log),contrasts=list(TreatEnv="contr.sum"))
+summary(model1)
+car::Anova(model1,type="II")
+
+dflm1<-(df1lm %>% dplyr::group_by(TreatEnv1) %>% dplyr::summarise(
+  meanCyanidine3GlcHPLC   = mean(Cyanidine3GlcHPLC),
+  se = (sd(Cyanidine3GlcHPLC)/sqrt(length(Cyanidine3GlcHPLC)))))
+((0.008735452-0.002707439)/0.002707439)*100 ##222.6
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS7a2.pdf",height=6,width=4)
+ggplot(df1lm,aes(TreatEnv1, Cyanidine3GlcHPLC))+
+  geom_col(data=dflm1,aes(x=TreatEnv1, y=meanCyanidine3GlcHPLC,fill=TreatEnv1),width=0.8)+
+  geom_errorbar(data=dflm1,aes(x=TreatEnv1, y=meanCyanidine3GlcHPLC,ymin=meanCyanidine3GlcHPLC-se, ymax=meanCyanidine3GlcHPLC+se), width=0.3, position=position_dodge(0.80))+
+  scale_color_manual(values = c("Control"="#0056B3", "Copper"="#CC0000"))+
+  scale_fill_manual(values = c("Control"="#0056B3", "Copper"="#CC0000"))+
+  scale_y_continuous(breaks=seq(0.01,0.25,by=0.08),limits = c(0,0.25), expand = c(0,0))+
+  guides(col="none",fill="none")+labs(y="Cyanidine3GlcHPLC µmol/g FW")+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+        axis.text.y = element_text(size = 25,color="black", family = "sans"),
+        axis.title =element_text(size = 30,color="black",face = "bold", family = "sans"),
+        axis.ticks = element_line(color="black"))
+dev.off()
+```
+     #Correlation with mean population growth rate in naive plants
+```{r}
+df1lm<-df1lm[df1lm$Pretreat=="Cu-",]
+options(contrasts = c("contr.treatment", "contr.poly"))
+model<-glmmTMB(data=df1lm, meanGRArea~Cyanidine3GlcHPLC*TreatEnv+(1|Plate))
+sim<-simulateResiduals(model,n=500, plot=T)
+summary(model)
+options(contrasts = c("contr.sum", "contr.poly"))
+model<-glmmTMB(data=df1lm, meanGRArea~Cyanidine3GlcHPLC*TreatEnv+(1|Plate))
+car::Anova(model,type=3)
+
+model<-glmmTMB(data=df1lm[df1lm$TreatEnv=="Control",], meanGRArea~Cyanidine3GlcHPLC+(1|Plate))
+model<-glmmTMB(data=df1lm[df1lm$TreatEnv=="Copper",], meanGRArea~Cyanidine3GlcHPLC+(1|Plate))
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model,type=2)
+plot(allEffects(model))
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS5b.pdf",height=6,width=8)
+ggplot(df1lm,aes(y=meanGRArea, x=Cyanidine3GlcHPLC,col=TreatEnv))+
+  geom_point(size=3)+
+  scale_color_manual(values = c("Control"="#0056B3", "Copper"="#CC0000"))+
+  geom_smooth(method="lm",se=F,size=2)+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5, npc.x=1.8)+
+  scale_y_continuous(breaks=seq(0.2,0.5,by=0.1),limits = c(0.2,0.5), expand = c(0,0))+
+  scale_x_continuous(breaks=seq(0,0.5,by=0.1),limits = c(0,0.5), expand = c(0,0))+
+  guides(col="none")+
+  theme(axis.text.x = element_text(size = 20,color="black", family = "sans"),
+        axis.text.y = element_text(size = 20,color="black", family = "sans"),
+        axis.title =element_text(size = 30,color="black",face = "bold", family = "sans"),
+        axis.ticks = element_line(color="black"))
+dev.off()
+```
+     #Correlation with mean pre-treatment ratio of population growth rate
+```{r}
+df1lm<-df_Met2[complete.cases(df_Met2$PreCyanidine3GlcHPLC),]
+options(contrasts = c("contr.treatment", "contr.poly"))
+
+model<-glmmTMB(data=df1lm, meanPreGRArea~(PreCyanidine3GlcHPLC)*TreatEnv+(1|Genotype),family=Gamma(log))
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model)
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS7d1.pdf",height=6,width=5)
+ggplot(df1lm,aes(y=meanPreGRArea, x=PreCyanidine3GlcHPLC,col=TreatEnv))+
+  geom_point(size=3)+
+  scale_color_manual(values = c("Control"="#0056B3", "Copper"="#CC0000"))+
+  geom_smooth(method="lm",se=F,size=3)+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  scale_y_continuous(breaks=seq(0.7,1.5,by=0.2),limits = c(0.7,1.5), expand = c(0,0))+
+  scale_x_continuous(breaks=seq(0.5,2.5,by=0.5),limits = c(0.5,2.5), expand = c(0,0))+
+  guides(col="none")+
+  theme(axis.text.x = element_text(size = 20,color="black", family = "sans"),
+        axis.text.y = element_text(size = 20,color="black", family = "sans"),
+        axis.title =element_text(size = 30,color="black",face = "bold", family = "sans"),
+        axis.ticks = element_line(color="black"))
+dev.off()
+```
+     #Correlation with mean FvFm
+```{r}
+df1lm<-df_Met[complete.cases(df_Met$Cyanidine3GlcHPLC),]
+df1lm<-df1lm[complete.cases(df1lm$meanOffFvFm),]
+df1lm<-df1lm[df1lm$Pretreat=="Cu-",]
+options(contrasts = c("contr.treatment", "contr.poly"))
+
+model<-glmmTMB(data=df1lm, meanOffFvFm~Cyanidine3GlcHPLC*TreatEnv+(1|Plate),dispformula = ~TreatEnv)
+sim<-simulateResiduals(model,n=500, plot=T)
+summary(model)
+model<-glmmTMB(data=df1lm, meanOffFvFm~Cyanidine3GlcHPLC*TreatEnv+(1|Plate),dispformula = ~TreatEnv,contrasts=list(TreatEnv="contr.sum"))
+car::Anova(model,type=3)
+
+model<-glmmTMB(data=df1lm[df1lm$TreatEnv=="Control"], meanOffFvFm~Cyanidine3GlcHPLC+(1|Plate))
+model<-glmmTMB(data=df1lm[df1lm$TreatEnv=="Copper"], meanOffFvFm~Cyanidine3GlcHPLC+(1|Plate),family=gaussian(log))
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model,type=2)
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS4a.pdf",height=6,width=8)
+ggplot(df1lm,aes(y=meanOffFvFm, x=Cyanidine3GlcHPLC,col=TreatEnv))+
+  geom_point(size=3)+
+  scale_color_manual(values = c("Control"="#0056B3", "Copper"="#CC0000"))+
+  geom_smooth(method="lm",se=F,size=2)+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5, npc.x=1.8)+
+  scale_y_continuous(breaks=seq(0.6,0.8,by=0.05),limits = c(0.65,0.8), expand = c(0,0))+
+  scale_x_continuous(breaks=seq(0,0.5,by=0.1),limits = c(0,0.5), expand = c(0,0))+
+  guides(col="none")+
+  theme(axis.text.x = element_text(size = 20,color="black", family = "sans"),
+        axis.text.y = element_text(size = 20,color="black", family = "sans"),
+        axis.title =element_text(size = 30,color="black",face = "bold", family = "sans"),
+        legend.text = element_text(size = 20,color="black", family = "sans"),
+        legend.background = element_rect(fill = F),
+        legend.key = element_rect(fill = F),
+        legend.title = element_text(size = 30,color="black", family = "sans"),
+        axis.ticks = element_line(color="black"))
+dev.off()
+```
+     #Correlation with mean pre-treatment ratio of FvFm
+```{r}
+df1lm<-df_Met2[complete.cases(df_Met2$PreCyanidine3GlcHPLC),]
+df1lm<-df1lm[complete.cases(df1lm$meanPreOffFvFm),]
+options(contrasts = c("contr.treatment", "contr.poly"))
+
+model<-glmmTMB(data=df1lm, meanPreOffFvFm~(PreCyanidine3GlcHPLC)*TreatEnv)
+sim<-simulateResiduals(model,n=500, plot=T)
+summary(model)
+model<-glmmTMB(data=df1lm, meanPreOffFvFm~(PreCyanidine3GlcHPLC)*TreatEnv,contrasts=list(TreatEnv="contr.sum"))
+car::Anova(model,type=3)
+plot(allEffects(model))
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS7c1.pdf",height=6,width=5)
+ggplot(df1lm,aes(y=meanPreOffFvFm, x=PreCyanidine3GlcHPLC,col=TreatEnv))+
+  geom_point(size=3)+
+  scale_color_manual(values = c("Control"="#0056B3", "Copper"="#CC0000"))+
+  geom_smooth(method="lm",se=F,size=3)+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  scale_y_continuous(breaks=seq(0.85,1.15,by=0.1),limits = c(0.85,1.15), expand = c(0,0))+
+  scale_x_continuous(breaks=seq(0.5,2.5,by=0.5),limits = c(0.5,2.5), expand = c(0,0))+
+  guides(col="none")+
+  theme(axis.text.x = element_text(size = 20,color="black", family = "sans"),
+        axis.text.y = element_text(size = 20,color="black", family = "sans"),
+        axis.title =element_text(size = 30,color="black",face = "bold", family = "sans"),
+        axis.ticks = element_line(color="black"))
+dev.off()
+```
+       # correlation between growth rate under control and plant pre-treatment
+```{r}
+model<-glmmTMB(data=CtrPreCtr,MCyanidine3GlcHPLC~MPreGRArea)
+plotResiduals(model,CtrPreCtr$MCyanidine3GlcHPLC);plotResiduals(model,CtrPreCtr$MPreGRArea)
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model)
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS4a1.pdf",height=6,width=6)
+ggplot(data=CtrPreCtr,aes(x=MPreGRArea,y=MCyanidine3GlcHPLC))+
+  geom_point(size=3)+
+  labs(y="Cyanidine3GlcHPLC under control",x="Pre-treatment ratio under control")+
+  geom_line(aes(y=predict(model, type="response")),size=1.5,col="#CC0000")+
+  scale_x_continuous(breaks=seq(0.9,1.2,by=0.1),limits=c(0.9,1.2),expand=c(0,0))+
+  scale_y_continuous(breaks=seq(0.08,0.21,by=0.02),limits=c(0.08,0.21),expand=c(0,0))+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+      axis.text.y = element_text(size = 18,color="black", family = "sans"),
+      axis.title =element_text(size = 25,color="black",face = "bold", family = "sans"),
+      axis.ticks = element_line(color="black"))
+dev.off()
+
+
+model<-glmmTMB(data=CtrPreCu,MCyanidine3GlcHPLC~MPreGRArea)
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model)
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS4a2.pdf",height=6,width=6)
+ggplot(data=CtrPreCu,aes(x=MPreGRArea,y=MCyanidine3GlcHPLC))+
+  geom_point(size=3)+
+  labs(y="Cyanidine3GlcHPLC under control",x="Pre-treatment ratio under copper")+
+  geom_line(aes(y=predict(model, type="response")),size=1.5,col="#CC0000")+
+  scale_x_continuous(breaks=seq(0.7,1.5,by=0.2),limits=c(0.7,1.5),expand=c(0,0))+
+  scale_y_continuous(breaks=seq(0.08,0.21,by=0.02),limits=c(0.08,0.21),expand=c(0,0))+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+      axis.text.y = element_text(size = 18,color="black", family = "sans"),
+      axis.title =element_text(size = 25,color="black",face = "bold", family = "sans"),
+      axis.ticks = element_line(color="black"))
+dev.off()
+```
+
+
+  ##CyanidinMalGlcHPLC
+    #Pretreat*TreatEnv* 
+```{r}
+df1lm<-df_Met[complete.cases(df_Met$CyanidinMalGlcHPLC),]
+options(contrasts = c("contr.treatment", "contr.poly"))
+
+model1<-glmmTMB(data=df1lm, CyanidinMalGlcHPLC~Pretreat*TreatEnv+(1|Genotype),family=Gamma(log))
+plotResiduals(model1,df1lm$TreatEnv,main=NULL);plotResiduals(model1,df1lm$Pretreat,main=NULL);
+sim1<-simulateResiduals(model1,n=500, plot=T);testDispersion(sim1)
+model1<-glmmTMB(data=df1lm, CyanidinMalGlcHPLC~Pretreat*TreatEnv1+(1|Genotype),family=Gamma(log),contrasts=list(Pretreat="contr.sum",TreatEnv1="contr.sum"))
+summary(model1)
+car::Anova(model1,type="III")
+
+df1lm%>%dplyr::group_by(TreatEnv,Pretreat)%>%dplyr::summarise(data_mean=mean(CyanidinMalGlcHPLC, na.rm=T),N=length(CyanidinMalGlcHPLC))
+((0.3151211-0.2999643)/0.2999643)*100 #5
+((0.7969298-0.7586004)/0.7586004)*100 #5
+
+moda<-glmmTMB(data=df1lm[df1lm$TreatEnv=="Control",],CyanidinMalGlcHPLC~Pretreat+(1|Genotype),family=gaussian(log))
+moda<-glmmTMB(data=df1lm[df1lm$TreatEnv1=="Copper",],CyanidinMalGlcHPLC~Pretreat+(1|Genotype),family=gaussian(log))
+simulateResiduals(moda,n=500, plot=T);#plotResiduals(model1,df1lm$Pretreat,main=NULL)
+car::Anova(moda,type="II")
+
+dflm1<-(df1lm %>% dplyr::group_by(TreatEnv1,Pretreat1) %>% dplyr::summarise(
+  meanCyanidinMalGlcHPLC   = mean(CyanidinMalGlcHPLC),
+  se = (sd(CyanidinMalGlcHPLC)/sqrt(length(CyanidinMalGlcHPLC)))))
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/Fig4d.pdf",height=6,width=4)
+ggplot(df1lm,aes(Pretreat1, CyanidinMalGlcHPLC))+
+  geom_col(data=dflm1,aes(x=Pretreat1, y=meanCyanidinMalGlcHPLC,fill=Pretreat1),width=0.8)+
+  geom_errorbar(data=dflm1,aes(x=Pretreat1, y=meanCyanidinMalGlcHPLC,ymin=meanCyanidinMalGlcHPLC-se, ymax=meanCyanidinMalGlcHPLC+se), width=0.3, position=position_dodge(0.80))+
+  scale_color_manual(values = c("Cu-"="#0056B3", "Cu+"="#CC0000"))+
+  scale_fill_manual(values = c("Cu-"="#0056B3", "Cu+"="#CC0000"))+
+  facet_grid(~TreatEnv1)+
+  scale_y_continuous(breaks=seq(0.1,0.9,by=0.2),limits = c(0,0.9), expand = c(0,0))+
+  guides(col="none",fill="none")+labs(y="CyanidinMalGlcHPLC µmol/g FW")+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+        axis.text.y = element_text(size = 25,color="black", family = "sans"),
+        axis.title =element_text(size = 30,color="black",face = "bold", family = "sans"),
+        legend.text = element_text(size = 20,color="black", family = "sans"),
+        legend.background = element_rect(fill = F),
+        legend.key = element_rect(fill = F),
+        legend.title = element_text(size = 30,color="black", family = "sans"),
+        axis.ticks = element_line(color="black"))
+dev.off()
+```
+    #Induction # Cu-
+```{r}
+df1lm<-df_Met[complete.cases(df_Met$CyanidinMalGlcHPLC),]
+df1lm<-df1lm[df1lm$Pretreat=="Cu-",]
+
+model1<-glmmTMB(data=df1lm, CyanidinMalGlcHPLC~TreatEnv+(1|Genotype),family=Gamma(log))
+plotResiduals(model1,df1lm$TreatEnv,main=NULL);sim1<-simulateResiduals(model1,n=500, plot=T);testDispersion(sim1)
+model1<-glmmTMB(data=df1lm, CyanidinMalGlcHPLC~TreatEnv+(1|Genotype),family=Gamma(log),contrasts=list(TreatEnv="contr.sum"))
+summary(model1)
+car::Anova(model1,type="II")
+
+dflm1<-(df1lm %>% dplyr::group_by(TreatEnv1) %>% dplyr::summarise(
+  meanCyanidinMalGlcHPLC   = mean(CyanidinMalGlcHPLC),
+  se = (sd(CyanidinMalGlcHPLC)/sqrt(length(CyanidinMalGlcHPLC)))))
+((0.7586004-0.2999643)/0.2999643)*100 #152.8969
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS7a1.pdf",height=6,width=4)
+ggplot(df1lm,aes(TreatEnv1, CyanidinMalGlcHPLC))+
+  geom_col(data=dflm1,aes(x=TreatEnv1, y=meanCyanidinMalGlcHPLC,fill=TreatEnv1),width=0.8)+
+  geom_errorbar(data=dflm1,aes(x=TreatEnv1, y=meanCyanidinMalGlcHPLC,ymin=meanCyanidinMalGlcHPLC-se, ymax=meanCyanidinMalGlcHPLC+se), width=0.3, position=position_dodge(0.80))+
+  scale_color_manual(values = c("Control"="#0056B3", "Copper"="#CC0000"))+
+  scale_fill_manual(values = c("Control"="#0056B3", "Copper"="#CC0000"))+
+  scale_y_continuous(breaks=seq(0,0.8,by=0.2),limits = c(0,0.8), expand = c(0,0))+
+  guides(col="none",fill="none")+labs(y="CyanidinMalGl µmol/g FW")+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+        axis.text.y = element_text(size = 25,color="black", family = "sans"),
+        axis.title =element_text(size = 30,color="black",face = "bold", family = "sans"),
+        axis.ticks = element_line(color="black"))
+dev.off()
+```
+     #Correlation with mean population growth rate in naive plants
+```{r}
+df1lm<-df1lm[df1lm$Pretreat=="Cu-",]
+model<-glmmTMB(data=df1lm, meanGRArea~CyanidinMalGlcHPLC*TreatEnv+(1|Plate))
+sim<-simulateResiduals(model,n=500, plot=T)
+model<-glmmTMB(data=df1lm, meanGRArea~CyanidinMalGlcHPLC*TreatEnv+(1|Plate),contrasts=list(TreatEnv="contr.sum"))
+car::Anova(model,type=3)
+summary(model)
+model<-glmmTMB(data=df1lm[df1lm$TreatEnv=="Control",], meanGRArea~CyanidinMalGlcHPLC+(1|Plate))
+model<-glmmTMB(data=df1lm[df1lm$TreatEnv=="Copper",], meanGRArea~CyanidinMalGlcHPLC+(1|Plate))
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model,type=2)
+plot(allEffects(model))
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/Fig4c.pdf",height=6,width=8)
+ggplot(df1lm,aes(y=meanGRArea, x=CyanidinMalGlcHPLC,col=TreatEnv))+
+  geom_point(size=3)+
+  scale_color_manual(values = c("Control"="#0056B3", "Copper"="#CC0000"))+
+  geom_smooth(method="lm",se=F,size=2)+
+  stat_poly_eq(formula = x~y, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  scale_y_continuous(breaks=seq(0.2,0.5,by=0.1),limits = c(0.2,0.5), expand = c(0,0))+
+  scale_x_continuous(breaks=seq(0,2,by=0.5),limits = c(0,2), expand = c(0,0))+
+  guides(col="none")+
+  theme(axis.text.x = element_text(size = 20,color="black", family = "sans"),
+        axis.text.y = element_text(size = 20,color="black", family = "sans"),
+        axis.title =element_text(size = 30,color="black",face = "bold", family = "sans"),
+        legend.text = element_text(size = 20,color="black", family = "sans"),
+        legend.background = element_rect(fill = F),
+        legend.key = element_rect(fill = F),
+        legend.title = element_text(size = 30,color="black", family = "sans"),
+        axis.ticks = element_line(color="black"))
+dev.off()
+```
+     #Correlation with mean pre-treatment ratio of population growth rate
+```{r}
+df1lm<-df_Met2[complete.cases(df_Met2$PreCyanidinMalGlcHPLC),]
+df1lm<-df1lm[complete.cases(df1lm$meanPreGRArea),]
+options(contrasts = c("contr.treatment", "contr.poly"))
+
+model<-glmmTMB(data=df1lm, meanPreGRArea~PreCyanidinMalGlcHPLC*TreatEnv+(1|Genotype),family=Gamma(log))
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model)
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS7d2.pdf",height=6,width=5)
+ggplot(df1lm,aes(y=meanPreGRArea, x=PreCyanidinMalGlcHPLC,col=TreatEnv))+
+  geom_point(size=3)+
+  scale_color_manual(values = c("Control"="#0056B3", "Copper"="#CC0000"))+
+  geom_smooth(method="lm",se=F,size=3)+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  scale_y_continuous(breaks=seq(0.7,1.5,by=0.2),limits = c(0.7,1.5), expand = c(0,0))+
+  scale_x_continuous(breaks=seq(0.4,2.4,by=0.5),limits = c(0.4,2.4), expand = c(0,0))+
+  guides(col="none")+
+  theme(axis.text.x = element_text(size = 20,color="black", family = "sans"),
+        axis.text.y = element_text(size = 20,color="black", family = "sans"),
+        axis.title =element_text(size = 30,color="black",face = "bold", family = "sans"),
+        axis.ticks = element_line(color="black"))
+dev.off()
+```
+     #Correlation with mean FvFm
+```{r}
+df1lm<-df_Met[complete.cases(df_Met$CyanidinMalGlcHPLC),]
+df1lm<-df1lm[complete.cases(df1lm$meanOffFvFm),]
+df1lm<-df1lm[df1lm$Pretreat=="Cu-",]
+options(contrasts = c("contr.treatment", "contr.poly"))
+
+model<-glmmTMB(data=df1lm, meanOffFvFm~CyanidinMalGlcHPLC*TreatEnv+(1|Plate),family=Gamma(log))
+model<-glmmTMB(data=df1lm, meanOffFvFm~CyanidinMalGlcHPLC*TreatEnv+(1|Plate),dispformula = ~TreatEnv)
+sim<-simulateResiduals(model,n=500, plot=T)
+summary(model)
+options(contrasts = c("contr.sum", "contr.poly"))
+modelp<-glmmTMB(data=df1lm, meanOffFvFm~CyanidinMalGlcHPLC*TreatEnv+(1|Plate),dispformula = ~TreatEnv)
+car::Anova(modelp,type=3)
+plot(allEffects(model))
+
+model<-glmmTMB(data=df1lm[df1lm$TreatEnv=="Control",], meanOffFvFm~CyanidinMalGlcHPLC+(1|Plate))
+model<-glmmTMB(data=df1lm[df1lm$TreatEnv=="Copper",], meanOffFvFm~CyanidinMalGlcHPLC+(1|Plate))
+sim<-simulateResiduals(model,n=500, plot=T)
+summary(model)
+car::Anova(model)
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/Fig3b.pdf",height=6,width=8)
+ggplot(df1lm,aes(y=meanOffFvFm, x=CyanidinMalGlcHPLC,col=TreatEnv))+
+  geom_point(size=3)+
+  scale_color_manual(values = c("Control"="#0056B3", "Copper"="#CC0000"))+
+  geom_smooth(method="lm",se=F,size=2)+
+  stat_poly_eq(formula = x~y, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  scale_y_continuous(breaks=seq(0.6,0.8,by=0.05),limits = c(0.65,0.8), expand = c(0,0))+
+  scale_x_continuous(breaks=seq(0,2,by=0.5),limits = c(0,2), expand = c(0,0))+
+  guides(col="none")+
+  theme(axis.text.x = element_text(size = 20,color="black", family = "sans"),
+        axis.text.y = element_text(size = 20,color="black", family = "sans"),
+        axis.title =element_text(size = 30,color="black",face = "bold", family = "sans"),
+        legend.text = element_text(size = 20,color="black", family = "sans"),
+        legend.background = element_rect(fill = F),
+        legend.key = element_rect(fill = F),
+        legend.title = element_text(size = 30,color="black", family = "sans"),
+        axis.ticks = element_line(color="black"))
+dev.off()
+```
+     #Correlation with mean pre-treatment ratio of FvFm
+```{r}
+df1lm<-df_Met2[complete.cases(df_Met2$PreCyanidinMalGlcHPLC),]
+df1lm<-df1lm[complete.cases(df1lm$meanPreOffFvFm),]
+options(contrasts = c("contr.treatment", "contr.poly"))
+
+model<-glmmTMB(data=df1lm, PreCyanidinMalGlcHPLC~meanPreOffFvFm*TreatEnv,family=Gamma(log))
+sim<-simulateResiduals(model,n=500, plot=T)
+summary(model)
+model<-glmmTMB(data=df1lm, meanPreOffFvFm~PreCyanidinMalGlcHPLC*TreatEnv,contrasts=list(TreatEnv="contr.sum"))
+model<-glmmTMB(data=df1lm, PreCyanidinMalGlcHPLC~meanPreOffFvFm*TreatEnv,family=Gamma(log),contrasts=list(TreatEnv="contr.sum"))
+car::Anova(model,type=3)
+plot(allEffects(model))
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS7c2.pdf",height=6,width=5)
+ggplot(df1lm,aes(y=meanPreOffFvFm, x=PreCyanidinMalGlcHPLC,col=TreatEnv))+
+  geom_point(size=3)+
+  scale_color_manual(values = c("Control"="#0056B3", "Copper"="#CC0000"))+
+  geom_smooth(method="lm",se=F,size=3)+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  scale_y_continuous(breaks=seq(0.85,1.15,by=0.1),limits = c(0.85,1.15), expand = c(0,0))+
+  scale_x_continuous(breaks=seq(0.4,2.4,by=0.5),limits = c(0.4,2.4), expand = c(0,0))+
+  guides(col="none")+
+  theme(axis.text.x = element_text(size = 20,color="black", family = "sans"),
+        axis.text.y = element_text(size = 20,color="black", family = "sans"),
+        axis.title =element_text(size = 30,color="black",face = "bold", family = "sans"),
+        axis.ticks = element_line(color="black"))
+dev.off()
+```
+       # correlation between growth rate under control and plant pre-treatment
+```{r}
+model<-glmmTMB(data=CtrPreCtr,MCyanidinMalGlcHPLC~MPreGRArea)
+#model<-glmmTMB(data=CtrPreCtr,MCyanidinMalGlcHPLC~MPreGRArea+(1|Population))
+plotResiduals(model,CtrPreCtr$MCyanidinMalGlcHPLC);plotResiduals(model,CtrPreCtr$MPreGRArea)
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model)
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS4a3.pdf",height=6,width=6)
+ggplot(data=CtrPreCtr,aes(x=MPreGRArea,y=MCyanidinMalGlcHPLC))+
+  geom_point(size=3)+
+  labs(y="CyanidinMalGlcHPLC under control",x="Pre-treatment ratio under control")+
+  geom_line(aes(y=predict(model, type="response")),size=1.5,col="#CC0000")+
+  scale_x_continuous(breaks=seq(0.9,1.2,by=0.1),limits=c(0.9,1.2),expand=c(0,0))+
+  scale_y_continuous(breaks=seq(0.1,0.7,by=0.2),limits=c(0.1,0.7),expand=c(0,0))+
+  #stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+      axis.text.y = element_text(size = 18,color="black", family = "sans"),
+      axis.title =element_text(size = 25,color="black",face = "bold", family = "sans"),
+      axis.ticks = element_line(color="black"))
+dev.off()
+
+
+model<-glmmTMB(data=CtrPreCu,MCyanidinMalGlcHPLC~MPreGRArea)
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model)
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS4a4.pdf",height=6,width=6)
+ggplot(data=CtrPreCu,aes(x=MPreGRArea,y=MCyanidinMalGlcHPLC))+
+  geom_point(size=3)+
+  labs(y="CyanidinMalGlcHPLC under control",x="Pre-treatment ratio under copper")+
+  geom_line(aes(y=predict(model, type="response")),size=1.5,col="#CC0000")+
+  scale_x_continuous(breaks=seq(0.7,1.5,by=0.2),limits=c(0.7,1.5),expand=c(0,0))+
+  scale_y_continuous(breaks=seq(0.1,0.7,by=0.2),limits=c(0.1,0.7),expand=c(0,0))+
+  #stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+      axis.text.y = element_text(size = 18,color="black", family = "sans"),
+      axis.title =element_text(size = 25,color="black",face = "bold", family = "sans"),
+      axis.ticks = element_line(color="black"))
+dev.off()
+```
+
+
+  ##Luteolin7OGlc
+  #Correlation with mean population growth rate in naive plants
+```{r}
+df1lm<-df_Met[complete.cases(df_Met$Luteolin7OGlc),]
+df1lm<-df1lm[df1lm$Pretreat=="Cu-",]
+options(contrasts = c("contr.treatment", "contr.poly"))
+
+model<-glmmTMB(data=df1lm, meanGRArea~Luteolin7OGlc*TreatEnv+(1|Plate))
+sim<-simulateResiduals(model,n=500, plot=T)
+model<-glmmTMB(data=df1lm, meanGRArea~Luteolin7OGlc*TreatEnv+(1|Plate),contrasts=list(TreatEnv="contr.sum"))
+car::Anova(model,type=3)
+summary(model)
+model<-glmmTMB(data=df1lm[df1lm$TreatEnv=="Control",], meanGRArea~Luteolin7OGlc+(1|Plate))
+model<-glmmTMB(data=df1lm[df1lm$TreatEnv=="Copper",], meanGRArea~Luteolin7OGlc+(1|Plate))
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model,type=2)
+plot(allEffects(model))
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS6b1.pdf",height=6,width=6)
+ggplot(df1lm,aes(y=meanGRArea, x=Luteolin7OGlc,col=TreatEnv))+
+  geom_point(size=3)+
+  scale_color_manual(values = c("Control"="#0056B3", "Copper"="#CC0000"))+
+  geom_smooth(method="lm",se=F,size=3)+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  scale_y_continuous(breaks=seq(0.2,0.5,by=0.1),limits = c(0.2,0.5), expand = c(0,0))+
+  scale_x_continuous(breaks=seq(0,6,by=2),limits = c(0,6), expand = c(0,0))+
+  guides(col="none")+
+  theme(axis.text.x = element_text(size = 20,color="black", family = "sans"),
+        axis.text.y = element_text(size = 20,color="black", family = "sans"),
+        axis.title =element_text(size = 30,color="black",face = "bold", family = "sans"),
+        axis.ticks = element_line(color="black"))
+dev.off()
+```
+    #Correlation with mean FvFm in naive plants
+```{r}
+df1lm<-df_Met[complete.cases(df_Met$Luteolin7OGlc),]
+df1lm<-df1lm[complete.cases(df1lm$meanOffFvFm),]
+df1lm<-df1lm[df1lm$Pretreat=="Cu-",]
+options(contrasts = c("contr.treatment", "contr.poly"))
+
+model<-glmmTMB(data=df1lm, meanOffFvFm~Luteolin7OGlc*TreatEnv+(1|Plate),dispformula = ~TreatEnv)
+sim<-simulateResiduals(model,n=500, plot=T)
+summary(model)
+options(contrasts = c("contr.sum", "contr.poly"))
+modelp<-glmmTMB(data=df1lm, meanOffFvFm~Luteolin7OGlc*TreatEnv+(1|Plate),dispformula = ~TreatEnv)
+car::Anova(modelp,type=3)
+plot(allEffects(model))
+
+model<-glmmTMB(data=df1lm[df1lm$TreatEnv=="Control",], meanOffFvFm~Luteolin7OGlc)
+model<-glmmTMB(data=df1lm[df1lm$TreatEnv=="Copper",], meanOffFvFm~Luteolin7OGlc)
+sim<-simulateResiduals(model,n=500, plot=T)
+summary(model)
+car::Anova(model)
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS6a1.pdf",height=6,width=6)
+ggplot(df1lm,aes(y=meanOffFvFm, x=Luteolin7OGlc,col=TreatEnv))+
+  geom_point(size=3)+
+  scale_color_manual(values = c("Control"="#0056B3", "Copper"="#CC0000"))+
+  geom_smooth(method="lm",se=F,size=2)+
+  stat_poly_eq(formula = x~y, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  scale_y_continuous(breaks=seq(0.65,0.8,by=0.05),limits = c(0.65,0.8), expand = c(0,0))+
+  scale_x_continuous(breaks=seq(0,6,by=2),limits = c(0,6), expand = c(0,0))+
+  guides(col="none")+
+  theme(axis.text.x = element_text(size = 20,color="black", family = "sans"),
+        axis.text.y = element_text(size = 20,color="black", family = "sans"),
+        axis.title =element_text(size = 30,color="black",face = "bold", family = "sans"),
+        axis.ticks = element_line(color="black"))
+dev.off()
+```
+       # correlation between growth rate under control and plant pre-treatment
+```{r}
+model<-glmmTMB(data=CtrPreCtr,MLuteolin7OGlc~MPreGRArea)
+plotResiduals(model,CtrPreCtr$MLuteolin7OGlc);plotResiduals(model,CtrPreCtr$MPreGRArea)
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model)
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS4b1.pdf",height=6,width=6)
+ggplot(data=CtrPreCtr,aes(x=MPreGRArea,y=MLuteolin7OGlc))+
+  geom_point(size=3)+
+  labs(y="Luteolin7OGlc under control",x="Pre-treatment ratio under control")+
+  geom_line(aes(y=predict(model, type="response")),size=1.5,col="#CC0000")+
+  scale_x_continuous(breaks=seq(0.9,1.2,by=0.1),limits=c(0.9,1.2),expand=c(0,0))+
+  scale_y_continuous(breaks=seq(0,3,by=1),limits=c(0,3),expand=c(0,0))+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+      axis.text.y = element_text(size = 18,color="black", family = "sans"),
+      axis.title =element_text(size = 25,color="black",face = "bold", family = "sans"),
+      axis.ticks = element_line(color="black"))
+dev.off()
+
+model<-glmmTMB(data=CtrPreCu,MLuteolin7OGlc~MPreGRArea)
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model)
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS4b2.pdf",height=6,width=6)
+ggplot(data=CtrPreCu,aes(x=MPreGRArea,y=MLuteolin7OGlc))+
+  geom_point(size=3)+
+  labs(y="Luteolin7OGlc under control",x="Pre-treatment ratio under copper")+
+  geom_line(aes(y=predict(model, type="response")),size=1.5,col="#CC0000")+
+  scale_x_continuous(breaks=seq(0.7,1.5,by=0.2),limits=c(0.7,1.5),expand=c(0,0))+
+  scale_y_continuous(breaks=seq(0,3,by=1),limits=c(0,3),expand=c(0,0))+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+      axis.text.y = element_text(size = 18,color="black", family = "sans"),
+      axis.title =element_text(size = 25,color="black",face = "bold", family = "sans"),
+      axis.ticks = element_line(color="black"))
+dev.off()
+```
+
+  ##Luteolin8CGlc
+      #Correlation with mean population growth rate in naive plants
+```{r}
+df1lm<-df_Met[complete.cases(df_Met$Luteolin8CGlc),]
+df1lm<-df1lm[df1lm$Pretreat=="Cu-",]
+options(contrasts = c("contr.treatment", "contr.poly"))
+
+model<-glmmTMB(data=df1lm, meanGRArea~Luteolin8CGlc*TreatEnv+(1|Plate))
+sim<-simulateResiduals(model,n=500, plot=T)
+model<-glmmTMB(data=df1lm, meanGRArea~Luteolin8CGlc*TreatEnv+(1|Plate),contrasts=list(TreatEnv="contr.sum"))
+car::Anova(model,type=3)
+summary(model)
+model<-glmmTMB(data=df1lm[df1lm$TreatEnv=="Control",], meanGRArea~Luteolin8CGlc+(1|Plate))
+model<-glmmTMB(data=df1lm[df1lm$TreatEnv=="Copper",], meanGRArea~Luteolin8CGlc+(1|Plate))
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model,type=2)
+plot(allEffects(model))
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS6b2.pdf",height=6,width=6)
+ggplot(df1lm,aes(y=meanGRArea, x=Luteolin8CGlc,col=TreatEnv))+
+  geom_point(size=3)+
+  scale_color_manual(values = c("Control"="#0056B3", "Copper"="#CC0000"))+
+  geom_smooth(method="lm",se=F,size=3)+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  scale_y_continuous(breaks=seq(0.2,0.5,by=0.1),limits = c(0.2,0.5), expand = c(0,0))+
+  scale_x_continuous(breaks=seq(0,4,by=1),limits = c(0,4), expand = c(0,0))+
+  guides(col="none")+
+  theme(axis.text.x = element_text(size = 20,color="black", family = "sans"),
+        axis.text.y = element_text(size = 20,color="black", family = "sans"),
+        axis.title =element_text(size = 30,color="black",face = "bold", family = "sans"),
+        axis.ticks = element_line(color="black"))
+dev.off()
+```
+    #Correlation with mean FvFm in naive plants
+```{r}
+df1lm<-df_Met[complete.cases(df_Met$Luteolin8CGlc),]
+df1lm<-df1lm[complete.cases(df1lm$meanOffFvFm),]
+df1lm<-df1lm[df1lm$Pretreat=="Cu-",]
+options(contrasts = c("contr.treatment", "contr.poly"))
+
+model<-glmmTMB(data=df1lm, meanOffFvFm~Luteolin8CGlc*TreatEnv+(1|Plate),dispformula = ~TreatEnv)
+sim<-simulateResiduals(model,n=500, plot=T)
+summary(model)
+options(contrasts = c("contr.sum", "contr.poly"))
+modelp<-glmmTMB(data=df1lm, meanOffFvFm~Luteolin8CGlc*TreatEnv+(1|Plate),dispformula = ~TreatEnv)
+car::Anova(modelp,type=3)
+plot(allEffects(model))
+
+model<-glmmTMB(data=df1lm[df1lm$TreatEnv=="Control",], meanOffFvFm~Luteolin8CGlc)
+model<-glmmTMB(data=df1lm[df1lm$TreatEnv=="Copper",], meanOffFvFm~Luteolin8CGlc)
+sim<-simulateResiduals(model,n=500, plot=T)
+summary(model)
+car::Anova(model)
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS6a2.pdf",height=6,width=6)
+ggplot(df1lm,aes(y=meanOffFvFm, x=Luteolin8CGlc,col=TreatEnv))+
+  geom_point(size=3)+
+  scale_color_manual(values = c("Control"="#0056B3", "Copper"="#CC0000"))+
+  geom_smooth(method="lm",se=F,size=2)+
+  stat_poly_eq(formula = x~y, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  scale_y_continuous(breaks=seq(0.65,0.8,by=0.05),limits = c(0.65,0.8), expand = c(0,0))+
+  scale_x_continuous(breaks=seq(0,4,by=1),limits = c(0,4), expand = c(0,0))+
+  guides(col="none")+
+  theme(axis.text.x = element_text(size = 20,color="black", family = "sans"),
+        axis.text.y = element_text(size = 20,color="black", family = "sans"),
+        axis.title =element_text(size = 30,color="black",face = "bold", family = "sans"),
+        axis.ticks = element_line(color="black"))
+dev.off()
+```
+       # correlation between growth rate under control and plant pre-treatment
+```{r}
+model<-glmmTMB(data=CtrPreCtr,MLuteolin8CGlc~MPreGRArea)
+plotResiduals(model,CtrPreCtr$MLuteolin8CGlc);plotResiduals(model,CtrPreCtr$MPreGRArea)
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model)
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS4b3.pdf",height=6,width=6)
+ggplot(data=CtrPreCtr,aes(x=MPreGRArea,y=MLuteolin8CGlc))+
+  geom_point(size=3)+
+  labs(y="Luteolin8CGlc under control",x="Pre-treatment ratio under control")+
+  geom_line(aes(y=predict(model, type="response")),size=1.5,col="#CC0000")+
+  scale_x_continuous(breaks=seq(0.9,1.2,by=0.1),limits=c(0.9,1.2),expand=c(0,0))+
+  scale_y_continuous(breaks=seq(0.5,2.5,by=0.5),limits=c(0.5,2.5),expand=c(0,0))+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+      axis.text.y = element_text(size = 18,color="black", family = "sans"),
+      axis.title =element_text(size = 25,color="black",face = "bold", family = "sans"),
+      axis.ticks = element_line(color="black"))
+dev.off()
+
+
+model<-glmmTMB(data=CtrPreCu,MLuteolin8CGlc~MPreGRArea)
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model)
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS4b4.pdf",height=6,width=6)
+ggplot(data=CtrPreCu,aes(x=MPreGRArea,y=MLuteolin8CGlc))+
+  geom_point(size=3)+
+  labs(y="Luteolin8CGlc under control",x="Pre-treatment ratio under copper")+
+  geom_line(aes(y=predict(model, type="response")),size=1.5,col="#CC0000")+
+  scale_x_continuous(breaks=seq(0.7,1.5,by=0.2),limits=c(0.7,1.5),expand=c(0,0))+
+  scale_y_continuous(breaks=seq(0.5,2.5,by=0.5),limits=c(0.5,2.5),expand=c(0,0))+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+      axis.text.y = element_text(size = 18,color="black", family = "sans"),
+      axis.title =element_text(size = 25,color="black",face = "bold", family = "sans"),
+      axis.ticks = element_line(color="black"))
+dev.off()
+```
+
+  ##Apigenin7OGlc
+     #Correlation with mean population growth rate in naive plants
+```{r}
+df1lm<-df_Met[complete.cases(df_Met$Apigenin7OGlc),]
+df1lm<-df1lm[df1lm$Pretreat=="Cu-",]
+
+options(contrasts = c("contr.treatment", "contr.poly"))
+model<-glmmTMB(data=df1lm, meanGRArea~Apigenin7OGlc*TreatEnv+(1|Plate))
+sim<-simulateResiduals(model,n=500, plot=T)
+model<-glmmTMB(data=df1lm, meanGRArea~Apigenin7OGlc*TreatEnv+(1|Plate),contrasts=list(TreatEnv="contr.sum"))
+car::Anova(model,type=3)
+summary(model)
+model<-glmmTMB(data=df1lm[df1lm$TreatEnv=="Control",], meanGRArea~Apigenin7OGlc+(1|Plate))
+model<-glmmTMB(data=df1lm[df1lm$TreatEnv=="Copper",], meanGRArea~Apigenin7OGlc+(1|Plate))
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model,type=2)
+plot(allEffects(model))
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS6b3.pdf",height=6,width=6)
+ggplot(df1lm,aes(y=meanGRArea, x=Apigenin7OGlc,col=TreatEnv))+
+  geom_point(size=3)+
+  scale_color_manual(values = c("Control"="#0056B3", "Copper"="#CC0000"))+
+  geom_smooth(method="lm",se=F,size=3)+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  scale_y_continuous(breaks=seq(0.2,0.5,by=0.1),limits = c(0.2,0.5), expand = c(0,0))+
+  scale_x_continuous(breaks=seq(0,2,by=0.5),limits = c(0,2), expand = c(0,0))+
+  guides(col="none")+
+  theme(axis.text.x = element_text(size = 20,color="black", family = "sans"),
+        axis.text.y = element_text(size = 20,color="black", family = "sans"),
+        axis.title =element_text(size = 30,color="black",face = "bold", family = "sans"),
+        axis.ticks = element_line(color="black"))
+dev.off()
+```
+    #Correlation with mean FvFm in in naive plants
+```{r}
+df1lm<-df_Met[complete.cases(df_Met$Apigenin7OGlc),]
+df1lm<-df1lm[complete.cases(df1lm$meanOffFvFm),]
+df1lm<-df1lm[df1lm$Pretreat=="Cu-",]
+
+options(contrasts = c("contr.treatment", "contr.poly"))
+model<-glmmTMB(data=df1lm, meanOffFvFm~Apigenin7OGlc*TreatEnv+(1|Plate))
+#model<-glmmTMB(data=df1lm, meanOffFvFm~Apigenin7OGlc*TreatEnv+(1|Plate),family=Gamma(log)) #cannot be fixed
+sim<-simulateResiduals(model,n=500, plot=T)
+summary(model)
+options(contrasts = c("contr.sum", "contr.poly"))
+modelp<-glmmTMB(data=df1lm, meanOffFvFm~Apigenin7OGlc*TreatEnv+(1|Plate))
+car::Anova(modelp,type=3)
+plot(allEffects(model))
+
+model<-glmmTMB(data=df1lm[df1lm$TreatEnv=="Control",], meanOffFvFm~Apigenin7OGlc)
+model<-glmmTMB(data=df1lm[df1lm$TreatEnv=="Copper",], meanOffFvFm~Apigenin7OGlc)
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model)
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS6a3.pdf",height=6,width=6)
+ggplot(df1lm,aes(y=meanOffFvFm, x=Apigenin7OGlc,col=TreatEnv))+
+  geom_point(size=3)+
+  scale_color_manual(values = c("Control"="#0056B3", "Copper"="#CC0000"))+
+  geom_smooth(method="lm",se=F,size=2)+
+  stat_poly_eq(formula = x~y, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  scale_y_continuous(breaks=seq(0.65,0.8,by=0.05),limits = c(0.65,0.8), expand = c(0,0))+
+  scale_x_continuous(breaks=seq(0,2,by=0.5),limits = c(0,2), expand = c(0,0))+
+  guides(col="none")+
+  theme(axis.text.x = element_text(size = 20,color="black", family = "sans"),
+        axis.text.y = element_text(size = 20,color="black", family = "sans"),
+        axis.title =element_text(size = 30,color="black",face = "bold", family = "sans"),
+        axis.ticks = element_line(color="black"))
+dev.off()
+```
+       # correlation between growth rate under control and plant pre-treatment
+```{r}
+model<-glmmTMB(data=CtrPreCtr,MApigenin7OGlc~MPreGRArea)
+plotResiduals(model,CtrPreCtr$MApigenin7OGlc);plotResiduals(model,CtrPreCtr$MPreGRArea)
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model)
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS4c1.pdf",height=6,width=6)
+ggplot(data=CtrPreCtr,aes(x=MPreGRArea,y=MApigenin7OGlc))+
+  geom_point(size=3)+
+  labs(y="Apigenin7OGlc under control",x="Pre-treatment ratio under control")+
+  geom_line(aes(y=predict(model, type="response")),size=1.5,col="#CC0000")+
+  scale_x_continuous(breaks=seq(0.9,1.2,by=0.1),limits=c(0.9,1.2),expand=c(0,0))+
+  scale_y_continuous(breaks=seq(0.1,0.7,by=0.2),limits=c(0.1,0.7),expand=c(0,0))+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+      axis.text.y = element_text(size = 18,color="black", family = "sans"),
+      axis.title =element_text(size = 25,color="black",face = "bold", family = "sans"),
+      axis.ticks = element_line(color="black"))
+dev.off()
+
+
+model<-glmmTMB(data=CtrPreCu,MApigenin7OGlc~MPreGRArea)
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model)
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS4c2.pdf",height=6,width=6)
+ggplot(data=CtrPreCu,aes(x=MPreGRArea,y=MApigenin7OGlc))+
+  geom_point(size=3)+
+  labs(y="Apigenin7OGlc under control",x="Pre-treatment ratio under copper")+
+  geom_line(aes(y=predict(model, type="response")),size=1.5,col="#CC0000")+
+  scale_x_continuous(breaks=seq(0.7,1.5,by=0.2),limits=c(0.7,1.5),expand=c(0,0))+
+  scale_y_continuous(breaks=seq(0.1,0.7,by=0.2),limits=c(0.1,0.7),expand=c(0,0))+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+      axis.text.y = element_text(size = 18,color="black", family = "sans"),
+      axis.title =element_text(size = 25,color="black",face = "bold", family = "sans"),
+      axis.ticks = element_line(color="black"))
+dev.off()
+```
+
+
+  ##Apigenin8CGlc
+     #Correlation with mean population growth rate in naive plants
+```{r}
+df1lm<-df_Met[complete.cases(df_Met$Apigenin8CGlc),]
+df1lm<-df1lm[df1lm$Pretreat=="Cu-",]
+
+options(contrasts = c("contr.treatment", "contr.poly"))
+model<-glmmTMB(data=df1lm, meanGRArea~Apigenin8CGlc*TreatEnv+(1|Plate))
+sim<-simulateResiduals(model,n=500, plot=T)
+model<-glmmTMB(data=df1lm, meanGRArea~Apigenin8CGlc*TreatEnv+(1|Plate),contrasts=list(TreatEnv="contr.sum"))
+car::Anova(model,type=3)
+summary(model)
+model<-glmmTMB(data=df1lm[df1lm$TreatEnv=="Control",], meanGRArea~Apigenin8CGlc+(1|Plate))
+model<-glmmTMB(data=df1lm[df1lm$TreatEnv=="Copper",], meanGRArea~Apigenin8CGlc+(1|Plate))
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model,type=2)
+plot(allEffects(model))
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS6b4.pdf",height=6,width=6)
+ggplot(df1lm,aes(y=meanGRArea, x=Apigenin8CGlc,col=TreatEnv))+
+  geom_point(size=3)+
+  scale_color_manual(values = c("Control"="#0056B3", "Copper"="#CC0000"))+
+  geom_smooth(method="lm",se=F,size=3)+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  scale_y_continuous(breaks=seq(0.2,0.5,by=0.1),limits = c(0.2,0.5), expand = c(0,0))+
+  scale_x_continuous(breaks=seq(0,4,by=1),limits = c(0,4), expand = c(0,0))+
+  guides(col="none")+
+  theme(axis.text.x = element_text(size = 20,color="black", family = "sans"),
+        axis.text.y = element_text(size = 20,color="black", family = "sans"),
+        axis.title =element_text(size = 30,color="black",face = "bold", family = "sans"),
+        axis.ticks = element_line(color="black"))
+dev.off()
+```
+    #Correlation with meanOffFvFm
+```{r}
+df1lm<-df_Met[complete.cases(df_Met$Apigenin8CGlc),]
+df1lm<-df1lm[complete.cases(df1lm$meanOffFvFm),]
+df1lm<-df1lm[df1lm$Pretreat=="Cu-",]
+
+options(contrasts = c("contr.treatment", "contr.poly"))
+model<-glmmTMB(data=df1lm, meanOffFvFm~Apigenin8CGlc*TreatEnv+(1|Plate))
+model<-glmmTMB(data=df1lm, meanOffFvFm~Apigenin8CGlc*TreatEnv+(1|Plate),family=Gamma(log))
+sim<-simulateResiduals(model,n=500, plot=T)
+summary(model)
+options(contrasts = c("contr.sum", "contr.poly"))
+modelp<-glmmTMB(data=df1lm, meanOffFvFm~Apigenin8CGlc*TreatEnv+(1|Plate),family=gaussian(inverse))
+car::Anova(modelp,type=3)
+plot(allEffects(model))
+
+model<-glmmTMB(data=df1lm[df1lm$TreatEnv=="Control",], meanOffFvFm~Apigenin8CGlc)
+model<-glmmTMB(data=df1lm[df1lm$TreatEnv=="Copper",], meanOffFvFm~Apigenin8CGlc)
+sim<-simulateResiduals(model,n=500, plot=T)
+summary(model)
+car::Anova(model)
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS6a4.pdf",height=6,width=6)
+ggplot(df1lm,aes(y=meanOffFvFm, x=Apigenin8CGlc,col=TreatEnv))+
+  geom_point(size=3)+
+  scale_color_manual(values = c("Control"="#0056B3", "Copper"="#CC0000"))+
+  geom_smooth(method="lm",se=F,size=2)+
+  stat_poly_eq(formula = x~y, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  scale_y_continuous(breaks=seq(0.65,0.8,by=0.05),limits = c(0.65,0.8), expand = c(0,0))+
+  scale_x_continuous(breaks=seq(0,4,by=1),limits = c(0,4), expand = c(0,0))+
+  guides(col="none")+
+  theme(axis.text.x = element_text(size = 20,color="black", family = "sans"),
+        axis.text.y = element_text(size = 20,color="black", family = "sans"),
+        axis.title =element_text(size = 30,color="black",face = "bold", family = "sans"),
+        axis.ticks = element_line(color="black"))
+dev.off()
+```
+       # correlation between growth rate under control and plant pre-treatment
+```{r}
+model<-glmmTMB(data=CtrPreCtr,MApigenin8CGlc~MPreGRArea)
+plotResiduals(model,CtrPreCtr$MApigenin8CGlc);plotResiduals(model,CtrPreCtr$MPreGRArea)
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model)
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS4c3.pdf",height=6,width=6)
+ggplot(data=CtrPreCtr,aes(x=MPreGRArea,y=MApigenin8CGlc))+
+  geom_point(size=3)+
+  labs(y="Apigenin8CGlc under control",x="Pre-treatment ratio under control")+
+  geom_line(aes(y=predict(model, type="response")),size=1.5,col="#CC0000")+
+  scale_x_continuous(breaks=seq(0.9,1.2,by=0.1),limits=c(0.9,1.2),expand=c(0,0))+
+  scale_y_continuous(breaks=seq(0,3,by=1),limits=c(0,3),expand=c(0,0))+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+      axis.text.y = element_text(size = 18,color="black", family = "sans"),
+      axis.title =element_text(size = 25,color="black",face = "bold", family = "sans"),
+      axis.ticks = element_line(color="black"))
+dev.off()
+
+model<-glmmTMB(data=CtrPreCu,MApigenin8CGlc~MPreGRArea)
+sim<-simulateResiduals(model,n=500, plot=T)
+car::Anova(model)
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/FigS4c4.pdf",height=6,width=6)
+ggplot(data=CtrPreCu,aes(x=MPreGRArea,y=MApigenin8CGlc))+
+  geom_point(size=3)+
+  labs(y="Apigenin8CGlc under control",x="Pre-treatment ratio under copper")+
+  geom_line(aes(y=predict(model, type="response")),size=1.5,col="#CC0000")+
+  scale_x_continuous(breaks=seq(0.7,1.5,by=0.2),limits=c(0.7,1.5),expand=c(0,0))+
+  scale_y_continuous(breaks=seq(0,3,by=1),limits=c(0,3),expand=c(0,0))+
+  stat_poly_eq(formula = y~x, aes(label = paste(after_stat(rr.label))), parse = TRUE,size=5)+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+      axis.text.y = element_text(size = 18,color="black", family = "sans"),
+      axis.title =element_text(size = 25,color="black",face = "bold", family = "sans"),
+      axis.ticks = element_line(color="black"))
+dev.off()
+```
+
+
+##################################################
+##################################################
+##################################################
+###### Repetition of 16 genotypes ################
+##################################################
+##################################################
+##################################################
+
+#upload data of metabolites
+```{r}
+df_Rep<-read_excel("C:/Users/chavezaa/Xu's lab Dropbox/Alexandra Chavez/achaveza@uni-muenster.de/TransgCopper_copy/GeneticBase_TransgnerationalPlasticity.xlsx", col_names = T, na = "",sheet="Repetition")
+```
+
+# convert to factors
+```{r}
+df_Rep$TreatEnv<-factor(df_Rep$TreatEnv)
+df_Rep$Pretreat<-factor(df_Rep$Pretreat)
+df_Rep$Pretreat1<-factor(df_Rep$Pretreat, levels=c("Cu-","Cu+"), ordered=TRUE)
+df_Rep$TreatEnv1<-factor(df_Rep$TreatEnv, levels=c("Control","Copper"), ordered=TRUE)
+df_Rep$Genotype<-factor(df_Rep$Genotype)
+df_Rep$Population<-factor(df_Rep$Population)
+
+env=unique(df_Rep$TreatEnv)
+pre=unique(df_Rep$Pretreat)
+rep=unique(df_Rep$Replicate)
+gen=unique(df_Rep$Genotype)
+```
+
+###############################
+### Pre-treatment Effect 
+###############################
+
+```{r}
+df_Rep2<-data.table(df_Rep); dim(df_Rep2)
+
+for (x in gen){
+  for (y in env){
+   a<-as.numeric(with(df_Rep2[Genotype==x&TreatEnv==y&Pretreat=="Cu-",], mean(GRArea, na.rm = TRUE)))
+	    	              df_Rep2[Genotype==x&TreatEnv==y&Pretreat=="Cu+", paste('PreMeanGRArea') := GRArea/a]
+}}
+df_Rep3<-df_Rep2[Pretreat=="Cu+",]
+```
+
+ #function to extract beta estimates
+```{r}
+## https://www.researchgate.net/post/Can-we-compare-betas-of-two-different-regression-analyses
+    #glmmTMB model
+stdCoef.merModTMB <- function(object,data) {
+  sdy <- sd(data)# the y values are now in the 'y' slot of the resp attribute
+  sdx <- apply(getME(lm2,"X"), 2, sd) # And the X matriz is in the 'X' slot of the pp attr
+  sc <- fixef(object)[[1]]*sdx/sdy #beta coefficient = usual regression coefficient multiplied by the sample standard deviation of IV(X) and divide by the sample standard deviation of the DV (Y). 
+  se.fixef <- coef(summary(object))$cond[,"Std. Error"] # last change - extracting the standard errors from the summary
+  se <- se.fixef*sdx/sdy
+  return(data.frame(stdcoef=sc, stdse=se))
+}
+```
+      #creating data for PreGRArea  ~Genotype*TreatEnv
+```{r}
+#Data
+df_Rep4<-df_Rep3[complete.cases(df_Rep3$PreMeanGRArea),]
+
+## Keep only genotypes that were repeated
+df4<-df4[complete.cases(df4$PreGRArea),]
+df5<-df4[df4$Genotype %in% gen,]
+
+#Models
+options(contrasts = c("contr.treatment", "contr.poly"))
+lm2<-glmmTMB(data=df_Rep4, PreMeanGRArea~Genotype*TreatEnv+(1|Genotype:Replicate)+(1|Rack),family=Gamma(log))
+lm2<-glmmTMB(data=df_Rep4, PreMeanGRArea~Genotype*TreatEnv+(1|Genotype:Replicate)+(1|Rack),dispformula = ~TreatEnv)
+sim1<-simulateResiduals(lm2,n=500, plot=T);testDispersion(sim1);testZeroInflation(sim1)
+plotResiduals(lm2,df_Rep4$Genotype);plotResiduals(lm2,df_Rep4$TreatEnv)
+
+lm4<-glmmTMB(data=df5, PreGRArea~Genotype*TreatEnv+(1|Genotype:Sample)+(1|Rack))
+sim1<-simulateResiduals(lm4,n=500, plot=T);testDispersion(sim1);testZeroInflation(sim1)
+plotResiduals(lm4,df5$Genotype);plotResiduals(lm4,df5$TreatEnv)
+
+#transformation using the functions
+dat2<-stdCoef.merModTMB(lm2,df_Rep4$PreMeanGRArea)
+dat4<-stdCoef.merModTMB(lm4,df5$PreGRArea)
+
+data1whole<-cbind(dat2,dat4);
+colnames(data1whole)<-c("stdcoef.lm2","stdse.lm2","stdcoef.lm4","stdse.lm4")
+data1whole$TreatEnv<-c(rep("Control",16),rep("Copper",16))
+
+options(contrasts = c("contr.treatment", "contr.poly")) ## default
+model<-glmmTMB(data=data1whole,stdcoef.lm4~stdcoef.lm2*TreatEnv)
+simulateResiduals(model,n=500, plot=T)
+summary(model)
+car::Anova(model,type=2)
+options(contrasts = c("contr.sum", "contr.poly")) ## for type III
+modelp<-glmmTMB(data=data1whole,stdcoef.lm4~stdcoef.lm2*TreatEnv)
+car::Anova(modelp,type=3)
+
+pdf("N:/Publications & Source Data/2025_CopperTransPlasticity/Figures/RFigures/Fig5.pdf",height=6,width=6)
+ggplot(data1whole,aes(y=stdcoef.lm4,x=stdcoef.lm2,color=TreatEnv))+
+  geom_line(aes(y=predict(model, type="response")),size=1.5)+
+  geom_point(size=8)+
+  guides(color="none")+
+  scale_x_continuous(breaks=seq(-0.3,0.3,by=0.2),limits=c(-0.3,0.3),expand=c(0,0))+
+  scale_y_continuous(breaks=seq(-0.25,0.75,by=0.25),limits=c(-0.25,0.75),expand=c(0,0))+
+  scale_color_manual(values = c("Control"="#0056B3", "Copper"="#CC0000"))+
+  theme(axis.text.x = element_text(size = 18,color="black", family = "sans"),
+      axis.text.y = element_text(size = 18,color="black", family = "sans"),
+      axis.title =element_text(size = 25,color="black",face = "bold", family = "sans"),
+      axis.ticks = element_line(color="black"))
+dev.off()
+```
+
+
+
